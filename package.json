@@ -1,0 +1,24 @@
+{
+  "name": "cat-i18n",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "nodemon": "^3.1.9",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev:maine-coon": "yarn workspace @cat-i18n/maine-coon dev",
+    "dev:thief-the-cat": "yarn workspace @cat-i18n/thief-the-cat dev"
+  }
+}
