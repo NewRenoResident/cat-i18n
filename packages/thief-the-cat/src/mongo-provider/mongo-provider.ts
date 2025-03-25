@@ -1,6 +1,5 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import {
-  LocaleData,
   StorageProvider,
   TranslationEntry,
   TranslationMap,
@@ -38,11 +37,22 @@ interface TranslationDocument {
   key: string;
   value: string;
   versions: VersionInfo[];
+  /**
+   * Массив тегов для категоризации переводов
+   */
+  tags?: string[];
+}
+
+/**
+ * Расширенная версия TranslationEntry с поддержкой тегов
+ */
+interface TaggedTranslationEntry extends TranslationEntry {
+  tags?: string[];
 }
 
 /**
  * Адаптер MongoDB для хранения переводов
- * Реализует интерфейс StorageProvider
+ * Реализует интерфейс StorageProvider с расширенной поддержкой тегов
  */
 export class MongoDBAdapter implements StorageProvider {
   private client: MongoClient;
@@ -78,6 +88,8 @@ export class MongoDBAdapter implements StorageProvider {
         { unique: true }
       );
       await this.collection.createIndex({ locale: 1 });
+      // Добавляем индекс для тегов для оптимизации поиска по тегам
+      await this.collection.createIndex({ tags: 1 });
 
       this.isConnected = true;
     }
@@ -226,14 +238,81 @@ export class MongoDBAdapter implements StorageProvider {
   }
 
   /**
+   * Получение перевода по ключу вместе с тегами
+   */
+  async getTranslationWithTags(
+    locale: string,
+    key: string,
+    options?: {
+      userId?: string;
+      versionTag?: string;
+      timestamp?: number;
+    }
+  ): Promise<TaggedTranslationEntry | undefined> {
+    await this.ensureConnected();
+
+    const doc = await this.collection!.findOne({ locale, key });
+
+    if (!doc) {
+      return undefined;
+    }
+
+    // Если не указаны опции версионирования, возвращаем текущее значение с тегами
+    if (
+      !options ||
+      (!options.userId && !options.versionTag && !options.timestamp)
+    ) {
+      return {
+        value: doc.value,
+        versions: doc.versions,
+        tags: doc.tags,
+      };
+    }
+
+    // Поиск конкретной версии перевода (аналогично методу getTranslation)
+    const { userId, versionTag, timestamp } = options;
+    let matchingVersion: VersionInfo | undefined;
+
+    for (const version of doc.versions) {
+      if (timestamp !== undefined && version.timestamp <= timestamp) {
+        if (!matchingVersion || version.timestamp > matchingVersion.timestamp) {
+          matchingVersion = version;
+        }
+        continue;
+      }
+
+      if (userId !== undefined && version.userId === userId) {
+        if (!matchingVersion || version.timestamp > matchingVersion.timestamp) {
+          matchingVersion = version;
+        }
+        continue;
+      }
+
+      if (versionTag !== undefined && version.tag === versionTag) {
+        if (!matchingVersion || version.timestamp > matchingVersion.timestamp) {
+          matchingVersion = version;
+        }
+        continue;
+      }
+    }
+
+    return {
+      value: matchingVersion ? matchingVersion.value : doc.value,
+      versions: doc.versions,
+      tags: doc.tags,
+    };
+  }
+
+  /**
    * Установка перевода по ключу с информацией о версии
    */
   async setTranslation(
     locale: string,
     key: string,
     value: string,
-    versionMeta: VersionMeta
-  ): Promise<TranslationEntry | undefined> {
+    versionMeta: VersionMeta,
+    tags?: string[]
+  ): Promise<TaggedTranslationEntry | undefined> {
     await this.ensureConnected();
 
     // Создаем полную информацию о версии
@@ -253,23 +332,25 @@ export class MongoDBAdapter implements StorageProvider {
         this.options.maxVersions
       ); // Ограничиваем количество хранимых версий
 
-      // Обновляем документ
+      // Обновляем документ с учетом тегов (если предоставлены)
       await this.collection!.updateOne(
         { locale, key },
         {
           $set: {
             value,
             versions,
+            ...(tags !== undefined && { tags }),
           },
         }
       );
     } else {
-      // Создаем новый документ
+      // Создаем новый документ с тегами (если предоставлены)
       await this.collection!.insertOne({
         locale,
         key,
         value,
         versions: [versionInfo],
+        ...(tags !== undefined && { tags }),
       });
     }
 
@@ -281,7 +362,148 @@ export class MongoDBAdapter implements StorageProvider {
             this.options.maxVersions
           )
         : [versionInfo],
+      tags,
     };
+  }
+
+  /**
+   * Обновление тегов для существующего перевода
+   */
+  async updateTags(
+    locale: string,
+    key: string,
+    tags: string[]
+  ): Promise<boolean> {
+    await this.ensureConnected();
+
+    const result = await this.collection!.updateOne(
+      { locale, key },
+      { $set: { tags } }
+    );
+
+    return result.matchedCount > 0;
+  }
+
+  /**
+   * Добавление тегов к существующему переводу
+   */
+  async addTags(locale: string, key: string, tags: string[]): Promise<boolean> {
+    await this.ensureConnected();
+
+    // $addToSet добавляет элементы в массив, если их еще нет
+    const result = await this.collection!.updateOne(
+      { locale, key },
+      { $addToSet: { tags: { $each: tags } } }
+    );
+
+    return result.matchedCount > 0;
+  }
+
+  /**
+   * Удаление тегов из существующего перевода
+   */
+  async removeTags(
+    locale: string,
+    key: string,
+    tags: string[]
+  ): Promise<boolean> {
+    await this.ensureConnected();
+
+    const result = await this.collection!.updateOne(
+      { locale, key },
+      { $pull: { tags: { $in: tags } } }
+    );
+
+    return result.matchedCount > 0;
+  }
+
+  /**
+   * Получение всех доступных тегов
+   */
+  async listAllTags(locale?: string): Promise<string[]> {
+    await this.ensureConnected();
+
+    const query = locale ? { locale } : {};
+    const tags = await this.collection!.distinct("tags", query).then(
+      (result) => result as string[]
+    );
+
+    return tags.filter(Boolean); // Фильтруем возможные null/undefined значения
+  }
+
+  /**
+   * Получение переводов по одному тегу
+   */
+  async getTranslationsByTag(
+    locale: string,
+    tag: string
+  ): Promise<Record<string, TaggedTranslationEntry>> {
+    await this.ensureConnected();
+
+    const documents = await this.collection!.find({
+      locale,
+      tags: tag,
+    }).toArray();
+
+    const result: Record<string, TaggedTranslationEntry> = {};
+
+    for (const doc of documents) {
+      result[doc.key] = {
+        value: doc.value,
+        versions: doc.versions,
+        tags: doc.tags,
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Получение переводов по нескольким тегам с возможностью выбора логики (AND/OR)
+   */
+  async getTranslationsByTags(
+    locale: string,
+    tags: string[],
+    options: { matchAll?: boolean } = {}
+  ): Promise<Record<string, TaggedTranslationEntry>> {
+    await this.ensureConnected();
+
+    if (!tags.length) {
+      return {};
+    }
+
+    // Определяем, используем ли логику AND (все теги должны присутствовать)
+    // или логику OR (хотя бы один из тегов должен присутствовать)
+    const matchAll = options.matchAll ?? false;
+    let query;
+
+    if (matchAll) {
+      // Логика AND: все указанные теги должны присутствовать
+      query = {
+        locale,
+        tags: { $all: tags },
+      };
+    } else {
+      // Логика OR: хотя бы один из указанных тегов должен присутствовать
+      query = {
+        locale,
+        tags: { $in: tags },
+      };
+    }
+
+    const documents = await this.collection!.find(query).toArray();
+
+    const result: Record<string, TaggedTranslationEntry> = {};
+
+    for (const doc of documents) {
+      result[doc.key] = {
+        value: doc.value,
+        versions: doc.versions,
+        tags: doc.tags,
+      };
+    }
+
+    return result;
   }
 
   /**
@@ -336,6 +558,38 @@ export class MongoDBAdapter implements StorageProvider {
 
     const doc = await this.collection!.findOne({ locale, key });
     return doc && doc.versions.length > 0 ? doc.versions[0] : undefined;
+  }
+
+  /**
+   * Подсчет количества переводов с заданными тегами
+   */
+  async countTranslationsByTags(
+    locale: string,
+    tags: string[],
+    options: { matchAll?: boolean } = {}
+  ): Promise<number> {
+    await this.ensureConnected();
+
+    if (!tags.length) {
+      return 0;
+    }
+
+    const matchAll = options.matchAll ?? false;
+    let query;
+
+    if (matchAll) {
+      query = {
+        locale,
+        tags: { $all: tags },
+      };
+    } else {
+      query = {
+        locale,
+        tags: { $in: tags },
+      };
+    }
+
+    return await this.collection!.countDocuments(query);
   }
 
   /**

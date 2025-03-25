@@ -1,0 +1,13 @@
+{
+  "name": "@cat-i18n/adapters",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "tsx ./index.ts",
+    "dev": "nodemon --watch './**/*.ts' --exec 'tsx' ./index.ts"
+  },
+  "dependencies": {
+    "@cat-i18n/maine-coon": "^1.0.0"
+  }
+}

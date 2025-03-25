@@ -1,34 +1,25 @@
-import { I18nOptions, TranslateOptions } from "./types.js";
-import { interpolate } from "./utils/interpolation.js";
-import { getPluralForm } from "./utils/plural.js";
-import { DateFormatter } from "./formatters/date-formatter.js";
-import { NumberFormatter } from "./formatters/number-formatter.js";
 import {
   LocaleData,
   StorageProvider,
-  TranslationEntry,
+  TaggedTranslationEntry,
   TranslationMap,
   TranslationStorage,
   VersionInfo,
   VersionMeta,
 } from "@cat-i18n/shared";
+import { I18nOptions, TranslateOptions } from "./types";
+import { DateFormatter, NumberFormatter } from "./formatters";
 
 export class I18n {
   private options: I18nOptions;
   private translations: LocaleData = {};
   private dateFormatter: DateFormatter = new DateFormatter();
   private numberFormatter: NumberFormatter = new NumberFormatter();
-  private availableLocales: string[] = [];
   private storageProvider: StorageProvider;
 
   constructor(options: I18nOptions = {}) {
     // Установка значений по умолчанию
     const defaultOptions: I18nOptions = {
-      interpolation: {
-        prefix: "{{",
-        suffix: "}}",
-      },
-      pluralSeparator: "|",
       disableCache: false,
     };
 
@@ -46,34 +37,12 @@ export class I18n {
   /**
    * Инициализация i18n с загрузкой всех доступных локалей или указанных в options.locales
    */
-  async init(): Promise<void> {
-    // Получаем список доступных локалей из провайдера
-    this.availableLocales = await this.storageProvider.listAvailableLocales();
-
-    // Если в опциях указаны локали, загружаем только их
-    const localesToLoad = this.options.locales || this.availableLocales;
-
-    // Загружаем переводы для всех локалей
-    await Promise.all(
-      localesToLoad.map(async (locale) => {
-        // Загружаем переводы из провайдера
-        const translations = await this.storageProvider.loadTranslations(
-          locale
-        );
-
-        // Сохраняем в кэше, если кэширование не отключено
-        if (!this.options.disableCache) {
-          this.translations[locale] = translations;
-        }
-      })
-    );
-  }
 
   /**
    * Возвращает список всех доступных локалей
    */
-  getAvailableLocales(): string[] {
-    return [...this.availableLocales];
+  getAvailableLocales(): Promise<string[]> {
+    return this.storageProvider.listAvailableLocales();
   }
 
   /**
@@ -89,26 +58,25 @@ export class I18n {
     }
 
     // Добавляем в список локалей, если ее там еще нет
-    if (!this.availableLocales.includes(locale)) {
-      this.availableLocales.push(locale);
-    }
 
     return translations;
   }
 
   /**
-   * Программное добавление переводов с версионированием
+   * Программное добавление переводов с версионированием и тегами
    * @param locale Локаль
    * @param translations Переводы
    * @param userId ID пользователя, добавившего перевод
    * @param versionTag Опциональный тег версии
+   * @param tags Опциональные теги для категоризации переводов
    */
   async addTranslations(
     locale: string,
     translations: TranslationMap,
     userId: string,
-    versionTag?: string
-  ): Promise<TranslationEntry | undefined> {
+    versionTag?: string,
+    tags?: string[]
+  ): Promise<TaggedTranslationEntry | undefined> {
     // Если для локали еще нет переводов и кэширование не отключено, инициализируем пустым объектом
     if (!this.options.disableCache && !this.translations[locale]) {
       this.translations[locale] = {};
@@ -121,18 +89,17 @@ export class I18n {
       tag: versionTag,
     };
 
-    // Обработка вложенных ключей и добавление их в хранилище
+    // Обработка вложенных ключей и добавление их в хранилище с тегами
     const addedTranslation = await this.processTranslations(
       locale,
       "",
       translations,
-      versionInfo
+      versionInfo,
+      tags
     );
 
     // Добавляем в список локалей, если ее там еще нет
-    if (!this.availableLocales.includes(locale)) {
-      this.availableLocales.push(locale);
-    }
+
     return addedTranslation;
   }
 
@@ -142,15 +109,7 @@ export class I18n {
    * @param options Опции перевода
    */
   async t(key: string, options: TranslateOptions): Promise<string> {
-    const {
-      locale,
-      count,
-      defaultValue,
-      userId,
-      versionTag,
-      timestamp,
-      interpolation = {},
-    } = options;
+    const { locale, userId, versionTag, timestamp } = options;
 
     // Получаем перевод по ключу с учетом версии
     let translation = await this.getTranslation(key, locale, {
@@ -159,37 +118,14 @@ export class I18n {
       timestamp,
     });
 
-    // Обработка множественных форм
-    if (count !== undefined && translation) {
-      const pluralSeparator = this.options.pluralSeparator || "|";
-      const pluralForms = translation
-        .split(pluralSeparator)
-        .map((form) => form.trim());
-      translation = getPluralForm(count, pluralForms, locale);
-
-      // Добавляем count в значения для интерполяции, если не указано явно
-      if (!("count" in interpolation)) {
-        (interpolation as Record<string, unknown>).count = count;
-      }
-    }
-
     // Используем значение по умолчанию, если перевод не найден
-    if (!translation && defaultValue) {
-      translation = defaultValue;
-    }
-
-    // Возвращаем ключ, если перевод не найден
-    if (!translation) {
-      return key;
-    }
+    if (!translation)
+      throw new Error(
+        `There is no translation for "${key} and ${JSON.stringify(options)}"`
+      );
 
     // Применяем интерполяцию
-    return interpolate(
-      translation,
-      interpolation,
-      this.options.interpolation?.prefix,
-      this.options.interpolation?.suffix
-    );
+    return translation;
   }
 
   /**
@@ -322,15 +258,16 @@ export class I18n {
   }
 
   /**
-   * Обновление перевода с информацией о версии
+   * Обновление перевода с информацией о версии и опциональными тегами
    */
   async updateTranslation(
     locale: string,
     key: string,
     value: string,
     userId: string,
-    versionTag?: string
-  ): Promise<TranslationEntry | undefined> {
+    versionTag?: string,
+    tags?: string[]
+  ): Promise<TaggedTranslationEntry | undefined> {
     const timestamp = Date.now();
     const versionInfo: VersionMeta = {
       userId,
@@ -342,7 +279,8 @@ export class I18n {
       locale,
       key,
       value,
-      versionInfo
+      versionInfo,
+      tags
     );
 
     // Обновляем кэш, если кэширование не отключено
@@ -369,6 +307,107 @@ export class I18n {
       }
     }
     return updatedTranslation;
+  }
+
+  /**
+   * Добавление тегов к переводу
+   */
+  async addTagsToTranslation(
+    locale: string,
+    key: string,
+    tags: string[]
+  ): Promise<boolean> {
+    if (!this.storageProvider.addTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.addTags(locale, key, tags);
+  }
+
+  /**
+   * Удаление тегов из перевода
+   */
+  async removeTagsFromTranslation(
+    locale: string,
+    key: string,
+    tags: string[]
+  ): Promise<boolean> {
+    if (!this.storageProvider.removeTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.removeTags(locale, key, tags);
+  }
+
+  /**
+   * Обновление (замена) тегов перевода
+   */
+  async updateTranslationTags(
+    locale: string,
+    key: string,
+    tags: string[]
+  ): Promise<boolean> {
+    if (!this.storageProvider.updateTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.updateTags(locale, key, tags);
+  }
+
+  /**
+   * Получение списка всех тегов, опционально фильтруемых по локали
+   */
+  async listAllTags(locale?: string): Promise<string[]> {
+    if (!this.storageProvider.listAllTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.listAllTags(locale);
+  }
+
+  /**
+   * Получение переводов по тегу
+   */
+  async getTranslationsByTag(
+    locale: string,
+    tag: string
+  ): Promise<Record<string, TaggedTranslationEntry>> {
+    if (!this.storageProvider.getTranslationsByTag) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.getTranslationsByTag(locale, tag);
+  }
+
+  /**
+   * Получение переводов по тегам с возможностью выбора логики (AND/OR)
+   */
+  async getTranslationsByTags(
+    locale: string,
+    tags: string[],
+    options: { matchAll?: boolean } = {}
+  ): Promise<Record<string, TaggedTranslationEntry>> {
+    if (!this.storageProvider.getTranslationsByTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.getTranslationsByTags(
+      locale,
+      tags,
+      options
+    );
+  }
+
+  /**
+   * Подсчет количества переводов с указанными тегами
+   */
+  async countTranslationsByTags(
+    locale: string,
+    tags: string[],
+    options: { matchAll?: boolean } = {}
+  ): Promise<number> {
+    if (!this.storageProvider.countTranslationsByTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.countTranslationsByTags(
+      locale,
+      tags,
+      options
+    );
   }
 
   /**
@@ -421,33 +460,49 @@ export class I18n {
   }
 
   /**
-   * Рекурсивная обработка переводов для добавления в хранилище
+   * Получение перевода с тегами
+   */
+  async getTranslationWithTags(
+    key: string,
+    locale: string,
+    options?: {
+      userId?: string;
+      versionTag?: string;
+      timestamp?: number;
+    }
+  ): Promise<TaggedTranslationEntry | undefined> {
+    if (!this.storageProvider.getTranslationWithTags) {
+      throw new Error("Storage provider does not support tags");
+    }
+    return await this.storageProvider.getTranslationWithTags(
+      locale,
+      key,
+      options
+    );
+  }
+
+  /**
+   * Рекурсивная обработка переводов для добавления в хранилище с тегами
    */
   private async processTranslations(
     locale: string,
     prefix: string,
     translations: TranslationMap,
-    versionInfo: VersionMeta
-  ): Promise<TranslationEntry | undefined> {
+    versionInfo: VersionMeta,
+    tags?: string[]
+  ): Promise<TaggedTranslationEntry | undefined> {
     for (const key in translations) {
       const fullKey = prefix ? `${prefix}.${key}` : key;
       const value = translations[key];
 
       if (typeof value === "string") {
-        // Если значение - строка, добавляем в хранилище
+        // Если значение - строка, добавляем в хранилище с тегами
         return await this.storageProvider.setTranslation(
           locale,
           fullKey,
           value,
-          versionInfo
-        );
-      } else if (typeof value === "object" && value !== null) {
-        // Если значение - объект, рекурсивно обрабатываем вложенные ключи
-        return await this.processTranslations(
-          locale,
-          fullKey,
-          value as TranslationMap,
-          versionInfo
+          versionInfo,
+          tags
         );
       }
     }
