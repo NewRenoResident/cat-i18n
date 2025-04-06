@@ -167,10 +167,7 @@ export class MongoDBAdapter implements StorageProvider {
     const storage: TranslationStorage = {};
 
     for (const doc of documents) {
-      storage[doc.key] = {
-        value: doc.value,
-        versions: doc.versions,
-      };
+      storage[doc.key] = doc.value;
     }
 
     return storage;

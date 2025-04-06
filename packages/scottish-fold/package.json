@@ -1,0 +1,13 @@
+{
+  "name": "@cat-i18n/scottish-fold",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12",
+    "@cat-i18n/transflow-ui-extension": "^1.0.0"
+  }
+}

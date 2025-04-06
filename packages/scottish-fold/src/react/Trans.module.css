@@ -1,0 +1,19 @@
+/* catppuccin-mocha highlight */
+.transflow-highlight {
+  /* Используем яркий цвет для акцента, например, red или peach */
+  outline: 1px dashed #f38ba8; /* red */
+  /* Легкий фон, чтобы не перекрывать текст */
+  background-color: rgba(243, 139, 168, 0.1); /* red с 10% прозрачности */
+  cursor: pointer;
+  /* Плавный переход для возможных будущих эффектов */
+  transition:
+    background-color 0.2s ease,
+    outline-color 0.2s ease;
+  /* Убедитесь, что outline не добавляет лишнего пространства */
+  outline-offset: 1px;
+}
+
+.transflow-highlight:hover {
+  outline-color: #fab387; /* peach */
+  background-color: rgba(250, 179, 135, 0.15); /* peach с 15% прозрачности */
+}

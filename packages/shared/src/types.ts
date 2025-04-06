@@ -161,7 +161,7 @@ export abstract class StorageProvider {
 }
 
 export interface TranslationStorage {
-  [key: string]: TranslationEntry;
+  [key: string]: Omit<TranslationEntry, "versions">;
 }
 
 export interface LocaleStorage {
