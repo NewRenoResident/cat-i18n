@@ -7,9 +7,8 @@ async function startServer() {
   try {
     // 1. Создаем MongoDB адаптер для хранения данных
     const storageAdapter = new MongoDBAdapter({
-      uri: "mongodb://localhost:27017",
+      uri: "mongodb://translator:translator123@localhost:27017/translations?authSource=translations",
       dbName: "translations",
-      collectionName: "i18n_translations",
       maxVersions: 15, // хранить до 15 версий каждого перевода
     });
 

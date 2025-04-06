@@ -25,6 +25,7 @@ import { TranslatorPanelProps } from "../types/types";
 import { ResizablePanel } from "./ResizablePanel";
 import { ResizeHandle } from "./ResizeHandle";
 import { TranslationEditor } from "./TranslationEditor";
+import { AddLocale } from "../features/add-locale/ui/addLocale";
 
 export const TranslatorPanel = ({ apiUrl }: TranslatorPanelProps) => {
   const { locale, setLocale, getAvailableLocales } = useTransFlow();
@@ -79,7 +80,7 @@ export const TranslatorPanel = ({ apiUrl }: TranslatorPanelProps) => {
         sx={{ mb: 2, minWidth: 120 }}
       >
         <InputLabel>Locale</InputLabel>
-        <Box display="flex" gap={2}>
+        <Box display="flex" padding="0 16px" gap={4}>
           <Select
             sx={{ flexGrow: 1 }}
             value={locale}
@@ -94,9 +95,7 @@ export const TranslatorPanel = ({ apiUrl }: TranslatorPanelProps) => {
               );
             })}
           </Select>
-          <IconButton>
-            <AddIcon />
-          </IconButton>
+          <AddLocale />
         </Box>
       </FormControl>
       <Divider sx={{ my: 2 }} />
