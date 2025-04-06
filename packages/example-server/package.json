@@ -1,0 +1,17 @@
+{
+  "name": "@cat-i18n/example-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "tsx ./index.ts",
+    "dev": "nodemon --watch './**/*.ts' --exec 'tsx' ./index.ts"
+  },
+  "dependencies": {
+    "@cat-i18n/adapters": "^1.0.0",
+    "@cat-i18n/shared": "^1.0.0",
+    "@cat-i18n/thief-the-cat": "^1.0.0",
+    "express": "^4.21.2",
+    "mongodb": "^6.14.2"
+  }
+}

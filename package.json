@@ -22,6 +22,7 @@
     "dev:maine-coon": "yarn workspace @cat-i18n/maine-coon dev",
     "dev:thief-the-cat": "yarn workspace @cat-i18n/thief-the-cat dev",
     "dev:adapters": "yarn workspace @cat-i18n/adapters dev",
-    "dev:examples": "yarn workspace @cat-i18n/examples dev"
+    "dev:example-s": "yarn workspace @cat-i18n/example-server start",
+    "dev:example-w": "yarn workspace @cat-i18n/example-web dev"
   }
 }
