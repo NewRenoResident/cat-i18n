@@ -29,14 +29,14 @@ db.translations.insertOne({
   _id: ObjectId("67e7db17690769baf198cdc9"),
   locale: "ru",
   key: "common.button.submit",
-  value: "Ебать тебя в сраку Саня",
+  value: "Привет",
   versions: [
     {
       userId: "translator-ui",
       timestamp: 1743860421714,
       tag: "ui-1743860421689",
       key: "common.button.submit",
-      value: "Ебать тебя в сраку Саня",
+      value: "Привет2",
     },
     {
       userId: "translator-ui",
