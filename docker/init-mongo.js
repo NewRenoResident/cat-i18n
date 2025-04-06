@@ -1,7 +1,6 @@
 // Подключаемся как root user
 db = db.getSiblingDB("admin");
 db.auth("admin", "password");
-
 // Переключаемся на нашу базу данных
 db = db.getSiblingDB("translations");
 
@@ -21,13 +20,25 @@ db.createUser({
   ],
 });
 
+// Создаем коллекцию для локалей
+db.createCollection("locales");
+
+// Вставляем документ для русской локали
+const ruLocaleId = ObjectId();
+db.locales.insertOne({
+  _id: ruLocaleId,
+  code: "ru",
+  name: "Russian",
+  nativeName: "Русский",
+});
+
 // Создаем коллекцию для переводов
 db.createCollection("translations");
 
-// Вставляем запрошенный документ с заданным ObjectId
+// Вставляем запрошенный документ с ссылкой на локаль
 db.translations.insertOne({
   _id: ObjectId("67e7db17690769baf198cdc9"),
-  locale: "ru",
+  locale: ruLocaleId,
   key: "common.button.submit",
   value: "Привет",
   versions: [
@@ -56,7 +67,6 @@ db.translations.insertOne({
   tags: ["button", "form", "common"],
 });
 
-// Создаем индекс для быстрого поиска по key и locale
 db.translations.createIndex({ key: 1, locale: 1 }, { unique: true });
 
 print(

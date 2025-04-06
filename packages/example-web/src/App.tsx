@@ -125,64 +125,20 @@ function DemoApp() {
 // Основной компонент приложения
 export default function App() {
   // Начальные переводы для демонстрации
-  const initialTranslations = {
-    en: {
-      "welcome.message":
-        "Hello, {name}! Click <bold>here</bold> or go to your <link>dashboard</link> to get started.",
-      "features.title": "Key Features",
-      "features.card1.title": "Easy Integration",
-      "features.card1.description":
-        "Integrate our solution with just a few lines of code.",
-      "features.card2.title": "Powerful Analytics",
-      "features.card2.description":
-        "Get detailed insights about your business performance.",
-      "features.card3.title": "Secure Platform",
-      "features.card3.description":
-        "Your data is always secure with our enterprise-grade security.",
-      "common.learnMore": "Learn More",
-      "notifications.unread":
-        "You have <badge>{count}</badge> unread messages. <icon>Check them now!</icon>",
-      "footer.copyright": "© {year} TransFlow Demo. All rights reserved.",
-      "footer.terms": "Terms of Service",
-      "footer.privacy": "Privacy Policy",
-      "footer.contact": "Contact Us",
-    },
-    ru: {
-      "welcome.message":
-        "Привет, {name}! Нажмите <bold>здесь</bold> или перейдите в свою <link>панель управления</link>, чтобы начать работу.",
-      "features.title": "Ключевые возможности",
-      "features.card1.title": "Простая интеграция",
-      "features.card1.description":
-        "Интегрируйте наше решение всего несколькими строками кода.",
-      "features.card2.title": "Мощная аналитика",
-      "features.card2.description":
-        "Получайте подробные сведения о производительности вашего бизнеса.",
-      "features.card3.title": "Безопасная платформа",
-      "features.card3.description":
-        "Ваши данные всегда защищены нашей системой безопасности корпоративного уровня.",
-      "common.learnMore": "Узнать больше",
-      "notifications.unread":
-        "У вас <badge>{count}</badge> непрочитанных сообщений. <icon>Проверьте их сейчас!</icon>",
-      "footer.copyright": "© {year} TransFlow Demo. Все права защищены.",
-      "footer.terms": "Условия использования",
-      "footer.privacy": "Политика конфиденциальности",
-      "footer.contact": "Связаться с нами",
-    },
-  };
 
   return (
     <TransFlowProvider
       options={{
         defaultLocale: "ru",
         fallbackLocale: "en",
-        initialTranslations: initialTranslations,
+
         apiUrl: "http://localhost:3000",
       }}
     >
-      <TranslatorUIProvider>
+      <TranslatorUIProvider apiUrl="http://localhost:3000">
         <DemoApp />
         <TranslatorToggle />
-        <TranslatorPanelContainer apiUrl="http://localhost:3000" />
+        <TranslatorPanelContainer />
       </TranslatorUIProvider>
     </TransFlowProvider>
   );

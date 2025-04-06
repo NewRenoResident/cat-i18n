@@ -1,5 +1,6 @@
 import {
   LocaleData,
+  LocaleDocument,
   StorageProvider,
   TaggedTranslationEntry,
   TranslationMap,
@@ -193,6 +194,10 @@ export class I18n {
     locale: string
   ): Promise<TranslationStorage | undefined> {
     return await this.storageProvider.getAllTranslations(locale);
+  }
+
+  async addTranslation(locale: LocaleDocument): Promise<boolean> {
+    return await this.storageProvider.addLocale(locale);
   }
 
   /**

@@ -8,6 +8,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.0.1",
-    "@mui/material": "^7.0.1"
+    "@mui/material": "^7.0.1",
+    "ky": "^1.8.0"
   }
 }

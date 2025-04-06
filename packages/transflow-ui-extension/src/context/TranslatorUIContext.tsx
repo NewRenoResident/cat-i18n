@@ -5,14 +5,19 @@ import { catppuccinTheme } from "../theme/catppuccin.constant";
 interface TranslatorUIContextType {
   isHighlightingEnabled: boolean;
   setHighlightingEnabled: (enabled: boolean) => void;
-  isPanelVisible: boolean; // <-- Добавлено
-  setIsPanelVisible: (visible: boolean) => void; // <-- Добавлено
+  isPanelVisible: boolean;
+  setIsPanelVisible: (visible: boolean) => void;
+  apiUrl: string;
 }
 
 const TranslatorUIContext = createContext<TranslatorUIContextType | null>(null);
 
-export const TranslatorUIProvider: React.FC<{ children: ReactNode }> = ({
+export const TranslatorUIProvider = ({
   children,
+  apiUrl,
+}: {
+  children: ReactNode;
+  apiUrl: string;
 }) => {
   const [isHighlightingEnabled, setHighlightingEnabled] = useState(false);
   const [isPanelVisible, setIsPanelVisible] = useState(false); // <-- Добавлено начальное состояние (скрыто)
@@ -21,10 +26,11 @@ export const TranslatorUIProvider: React.FC<{ children: ReactNode }> = ({
     <ThemeProvider theme={catppuccinTheme}>
       <TranslatorUIContext.Provider
         value={{
+          apiUrl,
           isHighlightingEnabled,
           setHighlightingEnabled,
-          isPanelVisible, // <-- Передаем в контекст
-          setIsPanelVisible, // <-- Передаем в контекст
+          isPanelVisible,
+          setIsPanelVisible,
         }}
       >
         {children}

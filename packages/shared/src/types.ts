@@ -8,6 +8,11 @@ export interface VersionInfo {
   value: string;
 }
 
+export interface LocaleDocument {
+  code: string;
+  name: string;
+  nativeName: string;
+}
 export interface TaggedTranslationEntry extends TranslationEntry {
   tags?: string[];
 }
@@ -38,6 +43,8 @@ export abstract class StorageProvider {
       timestamp?: number;
     }
   ): Promise<TaggedTranslationEntry | undefined>;
+
+  abstract addLocale(locale: LocaleDocument): Promise<boolean>;
 
   /**
    * Сохранение перевода с информацией о версии и опциональными тегами

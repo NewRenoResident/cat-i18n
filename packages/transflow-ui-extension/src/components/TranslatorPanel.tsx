@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useTransFlow } from "@cat-i18n/scottish-fold";
-import AddIcon from "@mui/icons-material/Add";
 import { useTranslatorUI } from "../context/TranslatorUIContext";
 import {
   Box,
@@ -14,22 +13,20 @@ import {
   Paper,
   FormControl,
   InputLabel,
-  Button,
-  IconButton,
 } from "@mui/material";
 
 import { KeysList } from "./KeysList";
 import { useResizablePanel } from "./useResizablePanel";
 import { useTranslationAPI } from "./useTranslationAPI";
-import { TranslatorPanelProps } from "../types/types";
 import { ResizablePanel } from "./ResizablePanel";
 import { ResizeHandle } from "./ResizeHandle";
 import { TranslationEditor } from "./TranslationEditor";
 import { AddLocale } from "../features/add-locale/ui/addLocale";
 
-export const TranslatorPanel = ({ apiUrl }: TranslatorPanelProps) => {
+export const TranslatorPanel = () => {
   const { locale, setLocale, getAvailableLocales } = useTransFlow();
-  const { isHighlightingEnabled, setHighlightingEnabled } = useTranslatorUI();
+  const { isHighlightingEnabled, setHighlightingEnabled, apiUrl } =
+    useTranslatorUI();
   const [availableLocales, setAvailableLocales] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 

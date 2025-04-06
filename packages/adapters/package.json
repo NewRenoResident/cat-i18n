@@ -8,6 +8,7 @@
     "dev": "nodemon --watch './**/*.ts' --exec 'tsx' ./index.ts"
   },
   "dependencies": {
-    "@cat-i18n/maine-coon": "^1.0.0"
+    "@cat-i18n/maine-coon": "^1.0.0",
+    "zod": "^3.24.2"
   }
 }

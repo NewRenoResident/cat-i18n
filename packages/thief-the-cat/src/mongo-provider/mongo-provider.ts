@@ -1,5 +1,6 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import {
+  LocaleDocument,
   StorageProvider,
   TranslationEntry,
   TranslationMap,
@@ -18,12 +19,6 @@ interface MongoDBAdapterOptions {
    * Название базы данных
    */
   dbName: string;
-
-  /**
-   * Название коллекции для хранения переводов
-   * По умолчанию: "translations"
-   */
-  collectionName?: string;
 
   /**
    * Максимальное количество версий, хранящихся для каждого перевода
@@ -58,12 +53,12 @@ export class MongoDBAdapter implements StorageProvider {
   private client: MongoClient;
   private db: Db | null = null;
   private collection: Collection<TranslationDocument> | null = null;
+  private localeCollection: Collection<LocaleDocument> | null = null;
   private options: Required<MongoDBAdapterOptions>;
   private isConnected: boolean = false;
 
   constructor(options: MongoDBAdapterOptions) {
     this.options = {
-      collectionName: "translations",
       maxVersions: 10,
       ...options,
     };
@@ -78,9 +73,8 @@ export class MongoDBAdapter implements StorageProvider {
     if (!this.isConnected) {
       await this.client.connect();
       this.db = this.client.db(this.options.dbName);
-      this.collection = this.db.collection<TranslationDocument>(
-        this.options.collectionName
-      );
+      this.collection = this.db.collection<TranslationDocument>("translations");
+      this.localeCollection = this.db.collection<LocaleDocument>("locales");
 
       // Создаем индексы для оптимизации запросов
       await this.collection.createIndex(
@@ -90,6 +84,9 @@ export class MongoDBAdapter implements StorageProvider {
       await this.collection.createIndex({ locale: 1 });
       // Добавляем индекс для тегов для оптимизации поиска по тегам
       await this.collection.createIndex({ tags: 1 });
+
+      // Добавляем индекс для локалей для оптимизации
+      await this.localeCollection.createIndex({ code: 1 }, { unique: true });
 
       this.isConnected = true;
     }
@@ -111,11 +108,74 @@ export class MongoDBAdapter implements StorageProvider {
   async listAvailableLocales(): Promise<string[]> {
     await this.ensureConnected();
 
-    const locales = await this.collection!.distinct("locale").then(
-      (result) => result as string[]
-    );
+    // Получаем уникальные коды локалей из коллекции locales
+    const localesFromCollection = await this.localeCollection!.distinct("code");
 
-    return locales;
+    // Если в коллекции locales нет данных, получаем локали из коллекции translations
+    if (!localesFromCollection || localesFromCollection.length === 0) {
+      return await this.collection!.distinct("locale");
+    }
+
+    return localesFromCollection;
+  }
+
+  /**
+   * Добавление новой локали
+   */
+  async addLocale(locale: LocaleDocument): Promise<boolean> {
+    await this.ensureConnected();
+
+    try {
+      // Проверяем, существует ли уже локаль с таким кодом
+      const existingLocale = await this.localeCollection!.findOne({
+        code: locale.code,
+      });
+
+      if (existingLocale) {
+        // Обновляем существующую локаль
+        await this.localeCollection!.updateOne(
+          { code: locale.code },
+          { $set: { name: locale.name, nativeName: locale.nativeName } }
+        );
+      } else {
+        // Добавляем новую локаль
+        await this.localeCollection!.insertOne(locale);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error adding locale:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Получение информации о локали
+   */
+  async getLocaleInfo(code: string): Promise<LocaleDocument | null> {
+    await this.ensureConnected();
+
+    return await this.localeCollection!.findOne({ code });
+  }
+
+  /**
+   * Получение всех локалей с полной информацией
+   */
+  async getAllLocales(): Promise<LocaleDocument[]> {
+    await this.ensureConnected();
+
+    return await this.localeCollection!.find().toArray();
+  }
+
+  /**
+   * Удаление локали
+   * Примечание: это не удаляет переводы для этой локали
+   */
+  async removeLocale(code: string): Promise<boolean> {
+    await this.ensureConnected();
+
+    const result = await this.localeCollection!.deleteOne({ code });
+    return result.deletedCount > 0;
   }
 
   /**
@@ -158,19 +218,27 @@ export class MongoDBAdapter implements StorageProvider {
   ): Promise<TranslationStorage | undefined> {
     await this.ensureConnected();
 
-    const documents = await this.collection!.find({ locale }).toArray();
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
+    if (locales) {
+      const documents = await this.collection!.find({
+        locale: locales._id,
+      }).toArray();
 
-    if (documents.length === 0) {
-      return undefined;
+      if (documents.length === 0) {
+        return undefined;
+      }
+
+      const storage: TranslationStorage = {};
+
+      for (const doc of documents) {
+        storage[doc.key] = doc.value;
+      }
+
+      return storage;
     }
-
-    const storage: TranslationStorage = {};
-
-    for (const doc of documents) {
-      storage[doc.key] = doc.value;
-    }
-
-    return storage;
+    return undefined;
   }
 
   /**
@@ -349,6 +417,19 @@ export class MongoDBAdapter implements StorageProvider {
         versions: [versionInfo],
         ...(tags !== undefined && { tags }),
       });
+
+      // При создании нового перевода, проверяем, есть ли локаль в коллекции locales
+      // Если нет, автоматически добавляем её с базовой информацией
+      const localeExists = await this.localeCollection!.findOne({
+        code: locale,
+      });
+      if (!localeExists) {
+        await this.localeCollection!.insertOne({
+          code: locale,
+          name: locale, // Временное значение
+          nativeName: locale, // Временное значение
+        });
+      }
     }
 
     return {
