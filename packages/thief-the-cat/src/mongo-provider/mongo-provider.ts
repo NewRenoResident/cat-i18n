@@ -607,8 +607,14 @@ export class MongoDBAdapter implements StorageProvider {
    */
   async removeTranslation(locale: string, key: string): Promise<boolean> {
     await this.ensureConnected();
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
 
-    const result = await this.collection!.deleteOne({ locale, key });
+    const result = await this.collection!.deleteOne({
+      locale: locales?._id,
+      key,
+    });
     return result.deletedCount > 0;
   }
 

@@ -547,7 +547,6 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.query is validated
       const { key, locale } = req.query as z.infer<
         typeof Schemas.keyAndLocaleQuery
       >;

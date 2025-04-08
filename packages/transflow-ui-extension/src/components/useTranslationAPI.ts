@@ -1,54 +1,71 @@
-import { useState, useCallback, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TranslationData, TranslationDetail } from "../types/types";
 
 export const useTranslationAPI = (apiUrl: string, locale: string) => {
-  const [translations, setTranslations] = useState<TranslationData>({});
+  const queryClient = useQueryClient();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
 
-  const fetchTranslations = useCallback(
-    async (currentLocale: string) => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(
-          `${apiUrl}/api/translations/translations/${currentLocale}`
-        );
-        if (!response.ok) throw new Error("Failed to fetch translations");
-        const result = await response.json();
-        setTranslations(result.data || {});
-      } catch (error) {
-        console.error("Error fetching translations:", error);
-        setTranslations({});
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [apiUrl]
-  );
-
-  const handleSelectKey = async (key: string) => {
-    setSelectedKey(key);
-    try {
+  // Запрос на получение всех переводов для указанной локали
+  const {
+    data: translations = {},
+    isLoading: isLoadingTranslations,
+    refetch: refetchTranslations,
+  } = useQuery<TranslationData>({
+    queryKey: ["translations", locale],
+    queryFn: async () => {
       const response = await fetch(
-        `${apiUrl}/api/translations/translation/tags?key=${encodeURIComponent(key)}&locale=${locale}`
+        `${apiUrl}/api/translations/translations/${locale}`
       );
-      if (response.ok) {
-        const details: TranslationDetail = await response.json();
-        setEditValue(details.value);
-      } else {
-        setEditValue(translations[key] || "");
-      }
-    } catch (error) {
-      console.error("Error fetching translation details:", error);
-      setEditValue(translations[key] || "");
-    }
-  };
+      if (!response.ok) throw new Error("Failed to fetch translations");
+      const result = await response.json();
+      return result.data || {};
+    },
+    enabled: !!locale,
+  });
 
-  const handleSaveChanges = async () => {
-    if (!selectedKey || !editValue) return;
-    setIsLoading(true);
-    try {
+  // Запрос на получение детальной информации о переводе
+  const { isLoading: isLoadingDetails } = useQuery<TranslationDetail>({
+    queryKey: ["translationDetail", selectedKey, locale],
+    queryFn: async () => {
+      if (!selectedKey) throw new Error("No key selected");
+
+      const response = await fetch(
+        `${apiUrl}/api/translations/translation/tags?key=${encodeURIComponent(selectedKey)}&locale=${locale}`
+      );
+
+      if (!response.ok) {
+        // Если детали недоступны, используем значение из общего списка переводов
+        setEditValue(translations[selectedKey] || "");
+        throw new Error("Failed to fetch translation details");
+      }
+
+      const details = await response.json();
+      setEditValue(details.value);
+      return details;
+    },
+    enabled: !!selectedKey && !!locale,
+  });
+
+  useEffect(() => {
+    if (selectedKey && isLoadingDetails === false) {
+      const queryState = queryClient.getQueryState([
+        "translationDetail",
+        selectedKey,
+        locale,
+      ]);
+      if (queryState?.status === "error") {
+        setEditValue(translations[selectedKey] || "");
+      }
+    }
+  }, [selectedKey, isLoadingDetails, queryClient, locale, translations]);
+
+  // Мутация для сохранения изменений перевода
+  const { mutate: saveChanges, isPending: isSaving } = useMutation({
+    mutationFn: async () => {
+      if (!selectedKey || !editValue) throw new Error("Missing key or value");
+
       const response = await fetch(`${apiUrl}/api/translations/translation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,22 +77,42 @@ export const useTranslationAPI = (apiUrl: string, locale: string) => {
           versionTag: `ui-${Date.now()}`,
         }),
       });
+
       if (!response.ok) throw new Error("Failed to save translation");
-      setTranslations((prev) => ({ ...prev, [selectedKey]: editValue }));
+      return response.json();
+    },
+    onSuccess: () => {
+      // Обновляем кеш для отображения изменений без перезагрузки
+      queryClient.setQueryData<TranslationData>(
+        ["translations", locale],
+        (oldData) => {
+          if (!oldData || !selectedKey) return oldData;
+          return { ...oldData, [selectedKey]: editValue };
+        }
+      );
+
+      // Инвалидируем кеш деталей, чтобы они обновились при следующем запросе
+      queryClient.invalidateQueries({
+        queryKey: ["translationDetail", selectedKey, locale],
+      });
+
       alert("Translation saved successfully!");
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error saving translation:", error);
       alert("Error saving translation!");
-    } finally {
-      setIsLoading(false);
-    }
+    },
+  });
+
+  const handleSelectKey = (key: string) => {
+    setSelectedKey(key);
   };
 
-  useEffect(() => {
-    if (locale) {
-      fetchTranslations(locale);
-    }
-  }, [locale, fetchTranslations]);
+  const handleSaveChanges = () => {
+    saveChanges();
+  };
+
+  const isLoading = isLoadingTranslations || isLoadingDetails || isSaving;
 
   return {
     translations,
@@ -85,5 +122,6 @@ export const useTranslationAPI = (apiUrl: string, locale: string) => {
     setEditValue,
     handleSelectKey,
     handleSaveChanges,
+    refetchTranslations,
   };
 };

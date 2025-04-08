@@ -12,20 +12,19 @@ import {
 import React, { useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
 
-import { addLocale } from "../api/locales.api.ts";
+import { useAddLocaleMutation } from "../api/locales.api";
+import { useTranslatorUI } from "../../../context/TranslatorUIContext";
 
 interface IAddLocale {
-  api?: string; // API endpoint for adding locales
-  onLocaleAdded?: () => void; // Callback when locale is successfully added
+  onLocaleAdded?: () => void;
 }
 
 export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
+  const { apiUrl } = useTranslatorUI();
   const [anchorEl, setAnchorEl] = React.useState<HTMLButtonElement | null>(
     null
   );
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [code, setCode] = useState("");
@@ -36,6 +35,9 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
   const [codeError, setCodeError] = useState("");
   const [nameError, setNameError] = useState("");
   const [nativeNameError, setNativeNameError] = useState("");
+
+  // Используем React Query для мутации
+  const addLocaleMutation = useAddLocaleMutation(apiUrl);
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
@@ -54,7 +56,6 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
     setCodeError("");
     setNameError("");
     setNativeNameError("");
-    setError(null);
   };
 
   const validateForm = (): boolean => {
@@ -97,30 +98,19 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
       return;
     }
 
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const result = await addLocale(api, code, name, nativeName);
-
-      if (result) {
-        setSuccess(true);
-        resetForm();
-        handleClose();
-        if (onLocaleAdded) {
-          onLocaleAdded();
-        }
-      } else {
-        setError("Failed to add locale. Please try again.");
+    addLocaleMutation.mutate(
+      { code, name, nativeName },
+      {
+        onSuccess: () => {
+          setSuccess(true);
+          resetForm();
+          handleClose();
+          if (onLocaleAdded) {
+            onLocaleAdded();
+          }
+        },
       }
-    } catch (err) {
-      setError(
-        "An error occurred: " +
-          (err instanceof Error ? err.message : String(err))
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
+    );
   };
 
   const open = Boolean(anchorEl);
@@ -151,9 +141,10 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
             Add New Locale
           </Typography>
 
-          {error && (
+          {addLocaleMutation.isError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
+              {addLocaleMutation.error?.message ||
+                "Failed to add locale. Please try again."}
             </Alert>
           )}
 
@@ -205,8 +196,12 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
               <Button variant="outlined" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button type="submit" variant="contained" disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Locale"}
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={addLocaleMutation.isPending}
+              >
+                {addLocaleMutation.isPending ? "Adding..." : "Add Locale"}
               </Button>
             </Box>
           </Stack>

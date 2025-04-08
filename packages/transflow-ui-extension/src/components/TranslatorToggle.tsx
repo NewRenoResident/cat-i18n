@@ -1,23 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslatorUI } from "../context/TranslatorUIContext";
-
-// Простой SVG значок (можно заменить на более подходящий)
-const TranslateIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 12h14M12 5l7 7-7 7" />
-    <path d="M19.29 17.29C19.88 16.7 20.28 15.88 20.28 15 20.28 14.12 19.88 13.3 19.29 12.71L18 11.41M12 20l-1.29-1.29C10.12 18.12 9.72 17.3 9.72 16.41 9.72 15.53 10.12 14.71 10.71 14.12L12 13M4.71 6.71C4.12 7.3 3.72 8.12 3.72 9c0 .88.4 1.7.99 2.29L6 12.59" />
-  </svg>
-);
+import PetsIcon from "@mui/icons-material/Pets";
 
 export const TranslatorToggle = () => {
   const { isPanelVisible, setIsPanelVisible } = useTranslatorUI();
@@ -71,10 +54,7 @@ export const TranslatorToggle = () => {
 
   // Обработчик клика для переключения панели (только если не было перетаскивания)
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Проверяем, был ли это действительно клик, а не конец перетаскивания
-    // Можно добавить небольшую проверку на смещение, но пока упростим
     if (e.detail === 1) {
-      // Проверяем, что это одинарный клик
       setIsPanelVisible(!isPanelVisible);
     }
   };
@@ -106,6 +86,7 @@ export const TranslatorToggle = () => {
     userSelect: "none", // Предотвратить выделение текста при перетаскивании
     transition: "background-color 0.2s ease",
   };
+  if (isPanelVisible) return null;
 
   return (
     <div
@@ -115,7 +96,7 @@ export const TranslatorToggle = () => {
       onClick={handleClick}
       title="Toggle Translator Panel"
     >
-      <TranslateIcon />
+      <PetsIcon sx={{ fill: "white" }} />
     </div>
   );
 };

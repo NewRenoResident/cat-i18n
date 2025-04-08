@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { TransFlowCore, TranslationOptions } from "../core";
 
 type TransFlowProviderProps = {
@@ -11,6 +17,7 @@ const TransFlowContext = createContext<{
   locale: string;
   setLocale: (locale: string) => Promise<void>;
   getAvailableLocales: () => Promise<string[]>;
+  availableLocales: string[];
 } | null>(null);
 
 export const TransFlowProvider: React.FC<TransFlowProviderProps> = ({
@@ -19,9 +26,13 @@ export const TransFlowProvider: React.FC<TransFlowProviderProps> = ({
 }) => {
   const [transFlow] = useState(() => new TransFlowCore(options));
   const [locale, setLocaleState] = useState(options.defaultLocale);
+  const [availableLocales, setAvailableLocales] = useState<string[]>([]);
 
   useEffect(() => {
     transFlow.loadLocale(options.defaultLocale);
+
+    // Load available locales when the component mounts
+    transFlow.getAvailableLocales().then(setAvailableLocales);
   }, []);
 
   const setLocale = async (newLocale: string) => {
@@ -34,13 +45,15 @@ export const TransFlowProvider: React.FC<TransFlowProviderProps> = ({
     return transFlow.translate(key, variables);
   };
 
-  const getAvailableLocales = () => {
-    return transFlow.getAvailableLocales();
-  };
+  const getAvailableLocales = useCallback(async () => {
+    const locales = await transFlow.getAvailableLocales();
+    setAvailableLocales(locales);
+    return locales;
+  }, []);
 
   return (
     <TransFlowContext.Provider
-      value={{ t, locale, setLocale, getAvailableLocales }}
+      value={{ t, locale, setLocale, getAvailableLocales, availableLocales }}
     >
       {children}
     </TransFlowContext.Provider>
