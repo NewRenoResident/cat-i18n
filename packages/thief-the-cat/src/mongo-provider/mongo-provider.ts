@@ -414,7 +414,6 @@ export class MongoDBAdapter implements StorageProvider {
   ): Promise<TaggedTranslationEntry | undefined> {
     await this.ensureConnected();
 
-    // Создаем полную информацию о версии
     const versionInfo: VersionInfo = {
       ...versionMeta,
       key,
@@ -528,6 +527,13 @@ export class MongoDBAdapter implements StorageProvider {
 
     return result.matchedCount > 0;
   }
+
+  /**
+   * Добавление нового перевода.
+   * В отличие от setTranslation, этот метод добавляет перевод только если
+   * он еще не существует для данной локали и ключа.
+   * @returns Добавленный перевод с тегами и версией или undefined, если перевод уже существует или произошла ошибка.
+   */
 
   /**
    * Получение всех доступных тегов

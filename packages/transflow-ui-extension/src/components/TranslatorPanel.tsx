@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import React from "react"; // Ensure React is imported
+import React from "react";
 
 import { useTransFlow } from "@cat-i18n/scottish-fold";
 import { useTranslatorUI } from "../context/TranslatorUIContext";
@@ -28,6 +28,7 @@ import { ResizeHandle } from "./ResizeHandle";
 import { TranslationEditor } from "./TranslationEditor";
 import { AddLocale } from "../features/add-locale/ui/addLocale";
 import { RemoveLocale } from "../features/remove-locale/remove-locale";
+import { UpdateLocale } from "../features/update-locale/update-locale";
 
 export const TranslatorPanel = () => {
   const { locale, setLocale, getAvailableLocales, availableLocales } =
@@ -44,22 +45,19 @@ export const TranslatorPanel = () => {
 
   const { panelHeight, panelRef, handleMouseDown } = useResizablePanel(300);
 
-  // Assuming useTranslationAPI doesn't fetch the locales list itself
-  // If it does, you might need to adjust how locales are fetched/managed
   const {
     translations,
     selectedKey,
     editValue,
-    isLoading: isLoadingTranslations, // Renamed to avoid conflict if RemoveLocale isLoading is used here
+    isLoading: isLoadingTranslations,
     setEditValue,
     handleSelectKey,
     handleSaveChanges,
   } = useTranslationAPI(apiUrl, locale);
 
   useEffect(() => {
-    // Fetch available locales when the panel mounts or locale might change
     getAvailableLocales();
-  }, [getAvailableLocales]); // Removed locale dependency if getAvailableLocales doesn't need it
+  }, [getAvailableLocales]);
 
   const filteredKeys = Object.keys(translations).filter((key) =>
     key.toLowerCase().includes(searchTerm.toLowerCase())
@@ -75,75 +73,56 @@ export const TranslatorPanel = () => {
       <Box
         sx={{
           height: "100%",
-          overflow: "auto", // Keep overflow auto for content scrolling
+          overflow: "auto",
           display: "flex",
           flexDirection: "column",
           boxSizing: "border-box",
         }}
       >
-        {/* --- Header Row --- */}
         <Box
           display="grid"
-          // Use specific widths/fr units for better control if needed
-          gridTemplateColumns="auto 1fr auto" // Adjust columns: Title | Controls | Close Button
-          paddingX={2} // Increased padding slightly
+          gridTemplateColumns="auto 1fr auto"
+          paddingX={2}
           paddingY={1}
           alignItems="center"
-          gap={2} // Reduced gap slightly
+          gap={2}
           flexShrink={0}
-          borderBottom={1} // Optional: Add a subtle border
+          borderBottom={1}
           borderColor="divider"
         >
-          <Typography
-            variant="h6" // Reduced size slightly for compactness
-            fontWeight={500} // Adjusted weight
-            // Removed gradient for simplicity, uncomment if preferred
-            // sx={{
-            //   background: "linear-gradient(45deg, #ea999c 0%, #f4b8e4 100%)",
-            //   backgroundClip: "text",
-            //   WebkitBackgroundClip: "text",
-            //   color: "transparent",
-            // }}
-          >
+          <Typography variant="h6" fontWeight={500}>
             Translator Panel
           </Typography>
 
-          {/* Center Column: Locale Controls */}
           <Box
             display="flex"
             alignItems="center"
-            justifyContent="center" // Center the controls in their column
-            gap={1.5} // Adjust gap between locale controls
+            justifyContent="center"
+            gap={1.5}
           >
             <RemoveLocale />
 
             <FormControl variant="outlined" size="small" sx={{ minWidth: 100 }}>
-              {" "}
               <InputLabel>Locale</InputLabel>
               <Select
-                value={locale || ""} // Handle potentially null/undefined locale
+                value={locale || ""}
                 onChange={(e) => setLocale(e.target.value)}
                 label="Locale"
               >
-                {availableLocales.map(
-                  (
-                    loc // Removed index as key is usually enough
-                  ) => (
-                    <MenuItem key={loc} value={loc}>
-                      {loc}
-                    </MenuItem>
-                  )
-                )}
+                {availableLocales.map((loc) => (
+                  <MenuItem key={loc} value={loc}>
+                    {loc}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
-
+            <UpdateLocale locale={locale} />
             <AddLocale />
           </Box>
 
-          {/* Right Column: Close Button */}
           <Box display="flex" justifyContent="flex-end">
             <IconButton
-              color="inherit" // Use inherit or default color, error might be too strong
+              color="inherit"
               onClick={() => setIsPanelVisible(false)}
               size="small"
             >
@@ -151,31 +130,30 @@ export const TranslatorPanel = () => {
             </IconButton>
           </Box>
         </Box>
-        {/* --- Options Row --- */}
         <Box px={2} pt={1} flexShrink={0}>
           <FormControlLabel
             control={
               <Checkbox
                 checked={isHighlightingEnabled}
                 onChange={(e) => setHighlightingEnabled(e.target.checked)}
-                size="small" // Smaller checkbox
+                size="small"
               />
             }
             label={
               <Typography variant="body2">
                 Highlight Translatable Elements
               </Typography>
-            } // Smaller label
+            }
           />
         </Box>
         <Box
           sx={{
             display: "flex",
-            flex: 1, // Allow this area to grow and fill space
+            flex: 1,
             gap: 2,
-            overflow: "hidden", // Prevent content overflow issues
-            p: 2, // Padding around the content area
-            minHeight: 150, // Ensure minimum height for visibility
+            overflow: "hidden",
+            p: 2,
+            minHeight: 150,
           }}
         >
           <Paper
@@ -196,7 +174,6 @@ export const TranslatorPanel = () => {
             >
               Keys: {filteredKeys.length}
             </Typography>
-
             <TextField
               fullWidth
               variant="outlined"
@@ -206,7 +183,6 @@ export const TranslatorPanel = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               sx={{ mb: 1.5, px: 1, flexShrink: 0 }}
             />
-
             <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
               {filteredKeys.length > 0 ? (
                 <KeysList

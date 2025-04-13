@@ -454,7 +454,7 @@ export class I18n {
   /**
    * Add a new locale document
    */
-  async addTranslation(locale: LocaleDocument): Promise<boolean> {
+  async addLocale(locale: LocaleDocument): Promise<boolean> {
     const result = await this.storageProvider.addLocale(locale);
 
     // Update cache with new locale
@@ -685,9 +685,6 @@ export class I18n {
     return await this.storageProvider.getTranslation(locale, key, options);
   }
 
-  /**
-   * Process translations recursively for adding to storage with tags
-   */
   private async processTranslations(
     locale: string,
     prefix: string,
@@ -695,50 +692,23 @@ export class I18n {
     versionInfo: VersionMeta,
     tags?: string[]
   ): Promise<TaggedTranslationEntry | undefined> {
-    let lastAddedTranslation: TaggedTranslationEntry | undefined;
-
     for (const key in translations) {
-      const fullKey = prefix ? `${prefix}.${key}` : key;
       const value = translations[key];
 
-      if (typeof value === "string") {
-        // If value is a string, add to storage with tags
-        lastAddedTranslation = await this.storageProvider.setTranslation(
-          locale,
-          fullKey,
-          value,
-          versionInfo,
-          tags
-        );
-      } else if (typeof value === "object" && value !== null) {
-        // Process nested objects recursively
-        const nestedTranslation = await this.processTranslations(
-          locale,
-          fullKey,
-          value as TranslationMap,
-          versionInfo,
-          tags
-        );
-
-        if (nestedTranslation) {
-          lastAddedTranslation = nestedTranslation;
-        }
-      }
+      return await this.storageProvider.setTranslation(
+        locale,
+        key,
+        value,
+        versionInfo,
+        tags
+      );
     }
-
-    return lastAddedTranslation;
   }
 
-  /**
-   * Enable or disable cache
-   */
   setCacheEnabled(enabled: boolean): void {
     this.cacheManager.setEnabled(enabled);
   }
 
-  /**
-   * Check if cache is enabled
-   */
   isCacheEnabled(): boolean {
     return this.cacheManager.isEnabled();
   }

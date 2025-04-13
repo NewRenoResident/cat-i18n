@@ -338,7 +338,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     this.router.delete(
       "/locales/:locale",
       this.validateParams(Schemas.addLocalesBody), // Validate route parameter 'locale'
-      this.handleUpdateLocale.bind(this)
+      this.handleRemoveLocale.bind(this)
     );
 
     this.router.put(
@@ -471,7 +471,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
       const { code, name, nativeName } = req.body as z.infer<
         typeof Schemas.addLocalesBody
       >;
-      const result = await this.i18n.addTranslation({ code, name, nativeName });
+      const result = await this.i18n.addLocale({ code, name, nativeName });
       this.sendSuccess(res, result, 201); // Use 201 Created status
     } catch (error) {
       this.sendError(res, error);
@@ -480,12 +480,13 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleUpdateLocale(req: Request, res: Response): Promise<void> {
     try {
-      const { code, name, nativeName } = req.body as z.infer<
+      const { locale } = req.params as z.infer<typeof Schemas.localeParam>;
+      const { name, nativeName } = req.body as z.infer<
         typeof Schemas.addLocalesBody
       >;
 
       const updated = await this.i18n.updateLocale({
-        code,
+        code: locale,
         name,
         nativeName,
       });
@@ -495,7 +496,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
       } else {
         res.status(404).json({
           success: false,
-          message: `Locale with code '${code}' not found.`,
+          message: `Locale with code '${locale}' not found.`,
         });
         return;
       }

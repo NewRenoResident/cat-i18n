@@ -2,11 +2,10 @@ import React from "react";
 import { useTransFlow } from "@cat-i18n/scottish-fold";
 import { IconButton, Tooltip } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import { useRemoveLocaleMutation } from "../add-locale/api/locales.api";
+import { useRemoveLocaleMutation } from "./api/remove-locale";
 
 export const RemoveLocale = () => {
-  const { locale, setLocale, availableLocales, getAvailableLocales } =
-    useTransFlow();
+  const { locale, setLocale, availableLocales } = useTransFlow();
   const removeLocaleMutation = useRemoveLocaleMutation();
 
   const handleRemove = async () => {
@@ -15,7 +14,6 @@ export const RemoveLocale = () => {
       return;
     }
 
-    // Confirmation dialog (replace with MUI Dialog for better UX)
     const confirmed = window.confirm(
       `Are you sure you want to permanently remove the locale "${locale}" and all its translations? This action cannot be undone.`
     );

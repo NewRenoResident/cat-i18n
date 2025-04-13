@@ -9,70 +9,56 @@ import {
   Alert,
   Snackbar,
 } from "@mui/material";
-import React, { useState } from "react";
-import AddIcon from "@mui/icons-material/Add";
+import React, { useState, useEffect } from "react";
+import EditIcon from "@mui/icons-material/Edit"; // Changed icon
+import { useTranslatorUI } from "../../context/TranslatorUIContext";
+import { useUpdateMutation } from "./api/update-locale.api";
 
-import { useTranslatorUI } from "../../../context/TranslatorUIContext";
-import { useAddLocaleMutation } from "../api/add-locales.api";
-
-interface IAddLocale {
-  onLocaleAdded?: () => void;
+interface IUpdateLocale {
+  locale: string;
+  onLocaleUpdated?: () => void;
 }
 
-export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
-  const { apiUrl } = useTranslatorUI();
+export const UpdateLocale = ({ locale, onLocaleUpdated }: IUpdateLocale) => {
+  const { apiUrl } = useTranslatorUI(); // Assuming it might be needed by the mutation hook
   const [anchorEl, setAnchorEl] = React.useState<HTMLButtonElement | null>(
     null
   );
   const [success, setSuccess] = useState(false);
 
-  // Form state
-  const [code, setCode] = useState("");
+  // Form state - initialized empty, will be set when popover opens
   const [name, setName] = useState("");
   const [nativeName, setNativeName] = useState("");
 
   // Form validation errors
-  const [codeError, setCodeError] = useState("");
   const [nameError, setNameError] = useState("");
   const [nativeNameError, setNativeNameError] = useState("");
 
-  // Используем React Query для мутации
-  const addLocaleMutation = useAddLocaleMutation();
+  // Use React Query mutation for updating
+  const updateLocaleMutation = useUpdateMutation();
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
-    // Reset form when opening
-    resetForm();
+    // Pre-fill form with existing locale data when opening
+    // Note: 'code' comes directly from props and is read-only
+    // Reset errors
+    setNameError("");
+    setNativeNameError("");
+    // Reset mutation state if it was previously in error
+    updateLocaleMutation.reset();
   };
 
   const handleClose = () => {
     setAnchorEl(null);
+    // Don't reset form here, only on open or success
   };
 
-  const resetForm = () => {
-    setCode("");
-    setName("");
-    setNativeName("");
-    setCodeError("");
-    setNameError("");
-    setNativeNameError("");
-  };
+  // No need for resetForm function as it's handled in handleClick and onSuccess
 
   const validateForm = (): boolean => {
     let isValid = true;
 
-    // Validate code (e.g., 'en', 'fr', 'es')
-    if (!code) {
-      setCodeError("Locale code is required");
-      isValid = false;
-    } else if (!/^[a-z]{2,3}(-[A-Z]{2,3})?$/.test(code)) {
-      setCodeError("Invalid locale format (e.g., 'en', 'fr-FR')");
-      isValid = false;
-    } else {
-      setCodeError("");
-    }
-
-    // Validate name
+    // Validate name (code is read-only, no validation needed here)
     if (!name) {
       setNameError("Language name is required");
       isValid = false;
@@ -98,28 +84,40 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
       return;
     }
 
-    addLocaleMutation.mutate(
-      { code, name, nativeName },
+    // Call the mutation hook
+    // Pass the identifier (locale.code) and the data to update
+    updateLocaleMutation.mutate(
+      {
+        code: locale, // Identifier
+        name: name, // Updated value
+        nativeName: nativeName, // Updated value
+      },
       {
         onSuccess: () => {
           setSuccess(true);
-          resetForm();
+          // No need to reset form fields here as they hold the new values
           handleClose();
-          if (onLocaleAdded) {
-            onLocaleAdded();
+          if (onLocaleUpdated) {
+            onLocaleUpdated(); // Trigger callback
           }
         },
+        // onError is handled by checking updateLocaleMutation.isError below
       }
     );
   };
 
   const open = Boolean(anchorEl);
-  const id = open ? "add-locale-popover" : undefined;
+  const id = open ? `update-locale-popover-${locale}` : undefined; // Unique ID
 
   return (
     <>
-      <IconButton onClick={handleClick} aria-label="Add new locale">
-        <AddIcon />
+      {/* Use an Edit Icon */}
+      <IconButton
+        onClick={handleClick}
+        aria-label={`Edit locale ${locale}`}
+        size="small" // Optional: make icon button smaller
+      >
+        <EditIcon fontSize="small" />
       </IconButton>
 
       <Popover
@@ -129,48 +127,54 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
         onClose={handleClose}
         anchorOrigin={{
           vertical: "bottom",
-          horizontal: "left",
+          horizontal: "center", // Adjusted position slightly
         }}
         transformOrigin={{
           vertical: "top",
-          horizontal: "left",
+          horizontal: "center", // Adjusted position slightly
         }}
       >
         <Box component="form" onSubmit={handleSubmit} sx={{ p: 3, width: 300 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Add New Locale
+            Update Locale ({locale}) {/* Show code in title */}
           </Typography>
 
-          {addLocaleMutation.isError && (
+          {/* Display error from the mutation hook */}
+          {updateLocaleMutation.isError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {addLocaleMutation.error?.message ||
-                "Failed to add locale. Please try again."}
+              {/* Provide a more specific error message if possible */}
+              {(updateLocaleMutation.error as any)?.message || // Type assertion might be needed
+                "Failed to update locale. Please try again."}
             </Alert>
           )}
 
           <Stack spacing={2}>
+            {/* Code field - Read Only */}
             <TextField
               label="Locale Code"
-              placeholder="e.g. en, fr-FR"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              error={!!codeError}
-              helperText={codeError || "Format: xx or xx-XX"}
+              value={locale} // Display from props
               fullWidth
               required
               size="small"
+              InputProps={{
+                readOnly: true, // Make it read-only
+              }}
+              disabled // Visually indicate it's not editable
+              helperText="Locale code cannot be changed."
             />
 
+            {/* Name field */}
             <TextField
               label="Language Name"
               placeholder="e.g. English"
-              value={name}
+              value={name} // Controlled component state
               onChange={(e) => setName(e.target.value)}
               error={!!nameError}
               helperText={nameError}
               fullWidth
               required
               size="small"
+              autoFocus // Focus the first editable field
             />
 
             <TextField
@@ -199,20 +203,23 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
               <Button
                 type="submit"
                 variant="contained"
-                disabled={addLocaleMutation.isPending}
+                disabled={updateLocaleMutation.isPending}
               >
-                {addLocaleMutation.isPending ? "Adding..." : "Add Locale"}
+                {updateLocaleMutation.isPending
+                  ? "Updating..."
+                  : "Update Locale"}
               </Button>
             </Box>
           </Stack>
         </Box>
       </Popover>
 
+      {/* Success message */}
       <Snackbar
         open={success}
         autoHideDuration={6000}
         onClose={() => setSuccess(false)}
-        message="Locale added successfully"
+        message="Locale updated successfully" // Updated message
       />
     </>
   );
