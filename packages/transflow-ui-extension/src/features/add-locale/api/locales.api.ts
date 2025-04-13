@@ -87,9 +87,6 @@ export const useUpdateMutation = () => {
           json: { code, name, nativeName },
         });
 
-        // Предполагаем, что API возвращает ответ в формате JSON
-        // Если API возвращает 204 No Content, можно заменить на:
-        // return { success: true };
         return await response.json<AddLocaleResponse>();
       } catch (error) {
         if (error instanceof Error) {
