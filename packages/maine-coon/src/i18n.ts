@@ -8,68 +8,290 @@ import {
   VersionInfo,
   VersionMeta,
 } from "@cat-i18n/shared";
-import { I18nOptions, TranslateOptions } from "./types";
+import { I18nOptions, TranslateOptions, CacheOptions } from "./types";
 import { DateFormatter, NumberFormatter } from "./formatters";
+
+/**
+ * Cache manager class to handle all cache operations
+ */
+export class CacheManager {
+  private cache: LocaleData = {};
+  private enabled: boolean;
+
+  constructor(enabled: boolean = true) {
+    this.enabled = enabled;
+  }
+
+  /**
+   * Check if caching is enabled
+   */
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  /**
+   * Enable or disable caching
+   */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+  }
+
+  /**
+   * Get value from cache
+   * @param locale Locale code
+   * @param key Translation key (can be nested using dot notation)
+   * @returns Cached translation or undefined if not found
+   */
+  get(locale: string, key: string): string | undefined {
+    if (!this.enabled || !this.cache[locale]) {
+      return undefined;
+    }
+
+    const parts = key.split(".");
+    let current: any = this.cache[locale];
+
+    // Navigate through nested keys
+    for (const part of parts) {
+      if (current[part] === undefined) {
+        return undefined;
+      }
+      current = current[part];
+    }
+
+    // Return only if it's a string
+    return typeof current === "string" ? current : undefined;
+  }
+
+  /**
+   * Set value in cache
+   * @param locale Locale code
+   * @param key Translation key (can be nested using dot notation)
+   * @param value Translation value
+   */
+  set(locale: string, key: string, value: string): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    // Initialize locale cache if it doesn't exist
+    if (!this.cache[locale]) {
+      this.cache[locale] = {};
+    }
+
+    const parts = key.split(".");
+    let current: any = this.cache[locale];
+
+    // Create path to the needed key if it doesn't exist
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+
+      if (!current[part] || typeof current[part] !== "object") {
+        current[part] = {};
+      }
+
+      current = current[part];
+    }
+
+    // Set the value
+    const lastPart = parts[parts.length - 1];
+    current[lastPart] = value;
+  }
+
+  /**
+   * Remove value from cache
+   * @param locale Locale code
+   * @param key Translation key (can be nested using dot notation)
+   * @returns true if value was removed, false otherwise
+   */
+  remove(locale: string, key: string): boolean {
+    if (!this.enabled || !this.cache[locale]) {
+      return false;
+    }
+
+    const parts = key.split(".");
+    let current: any = this.cache[locale];
+    const path: any[] = [];
+
+    // Find parent object for the key
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      path.push(current);
+
+      if (current[part] === undefined || typeof current[part] !== "object") {
+        return false;
+      }
+
+      current = current[part];
+    }
+
+    // Remove key from parent object
+    const lastPart = parts[parts.length - 1];
+    if (current[lastPart] !== undefined) {
+      delete current[lastPart];
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Store entire translation map for a locale
+   * @param locale Locale code
+   * @param translations Translation map
+   */
+  setTranslations(locale: string, translations: TranslationMap): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.cache[locale] = { ...translations };
+  }
+
+  /**
+   * Get entire translation map for a locale
+   * @param locale Locale code
+   * @returns Translation map or undefined if not found
+   */
+  getTranslations(locale: string): TranslationMap | undefined {
+    if (!this.enabled) {
+      return undefined;
+    }
+    return this.cache[locale];
+  }
+
+  /**
+   * Clear cache for a specific locale
+   * @param locale Locale code
+   */
+  clearLocale(locale: string): void {
+    delete this.cache[locale];
+  }
+
+  /**
+   * Clear entire cache
+   */
+  clearAll(): void {
+    this.cache = {};
+  }
+
+  /**
+   * Get all cached locales
+   * @returns Object with all cached translations
+   */
+  getAllLocales(): LocaleData {
+    return this.cache;
+  }
+
+  /**
+   * Check if a locale exists in cache
+   * @param locale Locale code
+   * @returns true if locale exists in cache, false otherwise
+   */
+  hasLocale(locale: string): boolean {
+    return this.enabled && !!this.cache[locale];
+  }
+
+  /**
+   * Merge translations into existing cache
+   * @param locale Locale code
+   * @param translations Translations to merge
+   */
+  mergeTranslations(locale: string, translations: TranslationMap): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    if (!this.cache[locale]) {
+      this.cache[locale] = {};
+    }
+
+    this.recursiveMerge(this.cache[locale], translations);
+  }
+
+  /**
+   * Recursively merge objects
+   */
+  private recursiveMerge(target: any, source: any): void {
+    for (const key in source) {
+      if (
+        typeof source[key] === "object" &&
+        source[key] !== null &&
+        !Array.isArray(source[key])
+      ) {
+        if (!target[key] || typeof target[key] !== "object") {
+          target[key] = {};
+        }
+        this.recursiveMerge(target[key], source[key]);
+      } else {
+        target[key] = source[key];
+      }
+    }
+  }
+}
 
 export class I18n {
   private options: I18nOptions;
-  private translations: LocaleData = {};
   private dateFormatter: DateFormatter = new DateFormatter();
   private numberFormatter: NumberFormatter = new NumberFormatter();
   private storageProvider: StorageProvider;
+  private cacheManager: CacheManager;
 
   constructor(options: I18nOptions = {}) {
-    // Установка значений по умолчанию
+    // Default options
     const defaultOptions: I18nOptions = {
       disableCache: false,
     };
 
-    // Объединение с пользовательскими опциями
+    // Merge with user options
     this.options = { ...defaultOptions, ...options };
 
-    // Получение storageProvider из опций
+    // Get storageProvider from options
     if (!this.options.storageProvider) {
       throw new Error("StorageProvider is required");
     }
 
     this.storageProvider = this.options.storageProvider;
+
+    // Initialize cache manager
+    this.cacheManager = new CacheManager(!this.options.disableCache);
   }
 
   /**
-   * Инициализация i18n с загрузкой всех доступных локалей или указанных в options.locales
+   * Initialize i18n with loading all available locales or specified in options.locales
    */
+  async initialize(locales?: string[]): Promise<void> {
+    if (!locales) {
+      // Load list of available locales
+      locales = await this.getAvailableLocales();
+    }
+
+    // Load translations for each locale
+    for (const locale of locales) {
+      await this.loadTranslations(locale);
+    }
+  }
 
   /**
-   * Возвращает список всех доступных локалей
+   * Returns list of all available locales
    */
   getAvailableLocales(): Promise<string[]> {
     return this.storageProvider.listAvailableLocales();
   }
 
   /**
-   * Загрузка переводов для конкретной локали
+   * Load translations for a specific locale
    */
   async loadTranslations(locale: string): Promise<TranslationMap> {
-    // Загружаем переводы из провайдера
+    // Load translations from provider
     const translations = await this.storageProvider.loadTranslations(locale);
 
-    // Обновляем кэш, если кэширование не отключено
-    if (!this.options.disableCache) {
-      this.translations[locale] = translations;
-    }
-
-    // Добавляем в список локалей, если ее там еще нет
+    // Update cache
+    this.cacheManager.setTranslations(locale, translations);
 
     return translations;
   }
 
   /**
-   * Программное добавление переводов с версионированием и тегами
-   * @param locale Локаль
-   * @param translations Переводы
-   * @param userId ID пользователя, добавившего перевод
-   * @param versionTag Опциональный тег версии
-   * @param tags Опциональные теги для категоризации переводов
+   * Programmatically add translations with versioning and tags
    */
   async addTranslations(
     locale: string,
@@ -78,9 +300,9 @@ export class I18n {
     versionTag?: string,
     tags?: string[]
   ): Promise<TaggedTranslationEntry | undefined> {
-    // Если для локали еще нет переводов и кэширование не отключено, инициализируем пустым объектом
-    if (!this.options.disableCache && !this.translations[locale]) {
-      this.translations[locale] = {};
+    // Initialize cache for locale if needed
+    if (!this.cacheManager.hasLocale(locale)) {
+      this.cacheManager.setTranslations(locale, {});
     }
 
     const timestamp = Date.now();
@@ -90,7 +312,7 @@ export class I18n {
       tag: versionTag,
     };
 
-    // Обработка вложенных ключей и добавление их в хранилище с тегами
+    // Process nested keys and add them to storage with tags
     const addedTranslation = await this.processTranslations(
       locale,
       "",
@@ -99,52 +321,63 @@ export class I18n {
       tags
     );
 
-    // Добавляем в список локалей, если ее там еще нет
+    // Update cache with new translations
+    this.cacheManager.mergeTranslations(locale, translations);
 
     return addedTranslation;
   }
 
   /**
-   * Получение перевода для ключа с учетом версии
-   * @param key Ключ перевода
-   * @param options Опции перевода
+   * Get translation for a key considering version
    */
   async t(key: string, options: TranslateOptions): Promise<string> {
     const { locale, userId, versionTag, timestamp } = options;
+    const cacheOptions: CacheOptions = { userId, versionTag, timestamp };
 
-    // Получаем перевод по ключу с учетом версии
-    let translation = await this.getTranslation(key, locale, {
-      userId,
-      versionTag,
-      timestamp,
-    });
+    // Try to get translation from cache if no specific version is requested
+    let translation: string | undefined;
 
-    // Используем значение по умолчанию, если перевод не найден
-    if (!translation)
+    if (!userId && !versionTag && !timestamp) {
+      translation = this.cacheManager.get(locale, key);
+    }
+
+    // If not in cache or specific version requested, get from storage
+    if (translation === undefined) {
+      translation = await this.getTranslation(key, locale, cacheOptions);
+
+      // Update cache with fetched translation if no specific version was requested
+      if (translation && !userId && !versionTag && !timestamp) {
+        this.cacheManager.set(locale, key, translation);
+      }
+    }
+
+    // Use default value if translation not found
+    if (!translation) {
       throw new Error(
         `There is no translation for "${key} and ${JSON.stringify(options)}"`
       );
+    }
 
-    // Применяем интерполяцию
+    // Apply interpolation if needed (could be implemented as a separate method)
     return translation;
   }
 
   /**
-   * Очистка кэша переводов
+   * Clear all cache
    */
   clearCache(): void {
-    this.translations = {};
+    this.cacheManager.clearAll();
   }
 
   /**
-   * Очистка кэша переводов для указанной локали
+   * Clear cache for a specific locale
    */
   clearLocaleCache(locale: string): void {
-    delete this.translations[locale];
+    this.cacheManager.clearLocale(locale);
   }
 
   /**
-   * Форматирование даты с учетом локали
+   * Format date considering locale
    */
   formatDate(
     date: Date,
@@ -155,7 +388,7 @@ export class I18n {
   }
 
   /**
-   * Форматирование числа с учетом локали
+   * Format number considering locale
    */
   formatNumber(
     number: number,
@@ -166,7 +399,7 @@ export class I18n {
   }
 
   /**
-   * Проверка наличия перевода для ключа с учетом версии
+   * Check if translation exists for a key considering version
    */
   async exists(
     key: string,
@@ -177,73 +410,77 @@ export class I18n {
       timestamp?: number;
     }
   ): Promise<boolean> {
+    // If specific version is requested, check directly in storage
+    if (
+      options &&
+      (options.userId || options.versionTag || options.timestamp)
+    ) {
+      return await this.storageProvider.exists(locale, key, options);
+    }
+
+    // Otherwise, first check in cache
+    if (this.cacheManager.get(locale, key) !== undefined) {
+      return true;
+    }
+
+    // If not in cache, check in storage
     return await this.storageProvider.exists(locale, key, options);
   }
 
   /**
-   * Получение загруженных локалей
+   * Get loaded locales
    */
   getLoadedLocales(): LocaleData {
-    return this.translations;
+    return this.cacheManager.getAllLocales();
   }
 
   /**
-   * Получение всех переводов для указанной локали
+   * Get all translations for a locale
    */
   async getAllTranslations(
     locale: string
   ): Promise<TranslationStorage | undefined> {
+    // First check cache
+    const cachedTranslations = this.cacheManager.getTranslations(locale);
+    if (cachedTranslations && Object.keys(cachedTranslations).length > 0) {
+      // Convert to TranslationStorage format if needed
+      return { [locale]: cachedTranslations } as TranslationStorage;
+    }
+
+    // If not in cache, get from storage
     return await this.storageProvider.getAllTranslations(locale);
   }
 
-  async addTranslation(locale: LocaleDocument): Promise<boolean> {
-    return await this.storageProvider.addLocale(locale);
-  }
-
   /**
-   * Удаление перевода по ключу
-   * @returns true если перевод был успешно удален, false если перевод не найден
+   * Add a new locale document
    */
-  async removeTranslation(locale: string, key: string): Promise<boolean> {
-    const result = await this.storageProvider.removeTranslation(locale, key);
+  async addTranslation(locale: LocaleDocument): Promise<boolean> {
+    const result = await this.storageProvider.addLocale(locale);
 
-    // Если успешно удалили из хранилища и кэширование не отключено,
-    // обновляем также кэш
-    if (result && !this.options.disableCache) {
-      const translations = this.translations[locale];
-      if (translations) {
-        const parts = key.split(".");
-        let current: any = translations;
-        const path: string[] = [];
-
-        // Найти родительский объект для ключа
-        for (let i = 0; i < parts.length - 1; i++) {
-          const part = parts[i];
-          path.push(part);
-
-          if (
-            current[part] === undefined ||
-            typeof current[part] !== "object"
-          ) {
-            return true; // Уже удалено из хранилища
-          }
-
-          current = current[part];
-        }
-
-        // Удалить ключ из родительского объекта в кэше
-        const lastPart = parts[parts.length - 1];
-        if (current[lastPart] !== undefined) {
-          delete current[lastPart];
-        }
-      }
+    // Update cache with new locale
+    if (result && locale.translations) {
+      this.cacheManager.setTranslations(locale.code, locale.translations);
     }
 
     return result;
   }
 
   /**
-   * Получение истории версий перевода
+   * Remove translation by key
+   */
+  async removeTranslation(locale: string, key: string): Promise<boolean> {
+    const result = await this.storageProvider.removeTranslation(locale, key);
+
+    // Update cache if removal was successful
+    if (result) {
+      this.cacheManager.remove(locale, key);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get version history for a translation
    */
   async getVersionHistory(
     locale: string,
@@ -253,7 +490,7 @@ export class I18n {
   }
 
   /**
-   * Получение последней версии перевода
+   * Get latest version of translation
    */
   async getLatestVersion(
     locale: string,
@@ -263,7 +500,7 @@ export class I18n {
   }
 
   /**
-   * Обновление перевода с информацией о версии и опциональными тегами
+   * Update translation with version info and optional tags
    */
   async updateTranslation(
     locale: string,
@@ -288,34 +525,14 @@ export class I18n {
       tags
     );
 
-    // Обновляем кэш, если кэширование не отключено
-    if (!this.options.disableCache) {
-      const translations = this.translations[locale];
-      if (translations) {
-        const parts = key.split(".");
-        let current: any = translations;
+    // Update cache with new translation
+    this.cacheManager.set(locale, key, value);
 
-        // Создаем путь до нужного ключа, если его нет
-        for (let i = 0; i < parts.length - 1; i++) {
-          const part = parts[i];
-
-          if (!current[part] || typeof current[part] !== "object") {
-            current[part] = {};
-          }
-
-          current = current[part];
-        }
-
-        // Устанавливаем значение
-        const lastPart = parts[parts.length - 1];
-        current[lastPart] = value;
-      }
-    }
     return updatedTranslation;
   }
 
   /**
-   * Добавление тегов к переводу
+   * Add tags to translation
    */
   async addTagsToTranslation(
     locale: string,
@@ -329,7 +546,7 @@ export class I18n {
   }
 
   /**
-   * Удаление тегов из перевода
+   * Remove tags from translation
    */
   async removeTagsFromTranslation(
     locale: string,
@@ -343,7 +560,7 @@ export class I18n {
   }
 
   /**
-   * Обновление (замена) тегов перевода
+   * Update (replace) translation tags
    */
   async updateTranslationTags(
     locale: string,
@@ -357,7 +574,7 @@ export class I18n {
   }
 
   /**
-   * Получение списка всех тегов, опционально фильтруемых по локали
+   * Get list of all tags, optionally filtered by locale
    */
   async listAllTags(locale?: string): Promise<string[]> {
     if (!this.storageProvider.listAllTags) {
@@ -367,7 +584,7 @@ export class I18n {
   }
 
   /**
-   * Получение переводов по тегу
+   * Get translations by tag
    */
   async getTranslationsByTag(
     locale: string,
@@ -380,7 +597,7 @@ export class I18n {
   }
 
   /**
-   * Получение переводов по тегам с возможностью выбора логики (AND/OR)
+   * Get translations by tags with possible logic selection (AND/OR)
    */
   async getTranslationsByTags(
     locale: string,
@@ -398,7 +615,7 @@ export class I18n {
   }
 
   /**
-   * Подсчет количества переводов с указанными тегами
+   * Count translations with specified tags
    */
   async countTranslationsByTags(
     locale: string,
@@ -416,56 +633,7 @@ export class I18n {
   }
 
   /**
-   * Получение перевода из указанной локали с учетом версии
-   */
-  private async getTranslation(
-    key: string,
-    locale: string,
-    options?: {
-      userId?: string;
-      versionTag?: string;
-      timestamp?: number;
-    }
-  ): Promise<string | undefined> {
-    // Если кэширование отключено или нужна конкретная версия, запрашиваем напрямую из провайдера
-    if (
-      this.options.disableCache ||
-      (options && (options.userId || options.versionTag || options.timestamp))
-    ) {
-      return await this.storageProvider.getTranslation(locale, key, options);
-    }
-
-    // Проверяем кэш
-    if (this.translations[locale]) {
-      const parts = key.split(".");
-      let current: any = this.translations[locale];
-
-      // Ищем по вложенным ключам
-      for (const part of parts) {
-        if (current[part] === undefined) {
-          // Если ключ не найден в кэше, запрашиваем из провайдера
-          return await this.storageProvider.getTranslation(
-            locale,
-            key,
-            options
-          );
-        }
-
-        current = current[part];
-      }
-
-      // Если нашли строку в кэше, возвращаем её
-      if (typeof current === "string") {
-        return current;
-      }
-    }
-
-    // Если не нашли в кэше или ключ не строка, запрашиваем из провайдера
-    return await this.storageProvider.getTranslation(locale, key, options);
-  }
-
-  /**
-   * Получение перевода с тегами
+   * Get translation with tags
    */
   async getTranslationWithTags(
     key: string,
@@ -487,7 +655,38 @@ export class I18n {
   }
 
   /**
-   * Рекурсивная обработка переводов для добавления в хранилище с тегами
+   * Remove locale and all related translations from storage.
+   * Clears cache for this locale.
+   */
+  async removeLocale(locale: string): Promise<boolean> {
+    const result = await this.storageProvider.removeLocale(locale);
+    if (result) {
+      this.cacheManager.clearLocale(locale);
+    }
+    return result;
+  }
+
+  async updateLocale(localeData: LocaleDocument): Promise<boolean> {
+    return await this.storageProvider.updateLocale(localeData);
+  }
+
+  /**
+   * Get translation from provider considering version
+   */
+  private async getTranslation(
+    key: string,
+    locale: string,
+    options?: {
+      userId?: string;
+      versionTag?: string;
+      timestamp?: number;
+    }
+  ): Promise<string | undefined> {
+    return await this.storageProvider.getTranslation(locale, key, options);
+  }
+
+  /**
+   * Process translations recursively for adding to storage with tags
    */
   private async processTranslations(
     locale: string,
@@ -496,20 +695,51 @@ export class I18n {
     versionInfo: VersionMeta,
     tags?: string[]
   ): Promise<TaggedTranslationEntry | undefined> {
+    let lastAddedTranslation: TaggedTranslationEntry | undefined;
+
     for (const key in translations) {
       const fullKey = prefix ? `${prefix}.${key}` : key;
       const value = translations[key];
 
       if (typeof value === "string") {
-        // Если значение - строка, добавляем в хранилище с тегами
-        return await this.storageProvider.setTranslation(
+        // If value is a string, add to storage with tags
+        lastAddedTranslation = await this.storageProvider.setTranslation(
           locale,
           fullKey,
           value,
           versionInfo,
           tags
         );
+      } else if (typeof value === "object" && value !== null) {
+        // Process nested objects recursively
+        const nestedTranslation = await this.processTranslations(
+          locale,
+          fullKey,
+          value as TranslationMap,
+          versionInfo,
+          tags
+        );
+
+        if (nestedTranslation) {
+          lastAddedTranslation = nestedTranslation;
+        }
       }
     }
+
+    return lastAddedTranslation;
+  }
+
+  /**
+   * Enable or disable cache
+   */
+  setCacheEnabled(enabled: boolean): void {
+    this.cacheManager.setEnabled(enabled);
+  }
+
+  /**
+   * Check if cache is enabled
+   */
+  isCacheEnabled(): boolean {
+    return this.cacheManager.isEnabled();
   }
 }

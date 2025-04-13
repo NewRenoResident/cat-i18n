@@ -37,7 +37,7 @@ export const AddLocale = ({ onLocaleAdded }: IAddLocale) => {
   const [nativeNameError, setNativeNameError] = useState("");
 
   // Используем React Query для мутации
-  const addLocaleMutation = useAddLocaleMutation(apiUrl);
+  const addLocaleMutation = useAddLocaleMutation();
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);

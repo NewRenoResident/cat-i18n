@@ -6,6 +6,12 @@ export interface I18nOptions {
   disableCache?: boolean;
 }
 
+export interface CacheOptions {
+  userId?: string;
+  versionTag?: string;
+  timestamp?: number;
+}
+
 export interface TranslateOptions {
   locale: string;
   count?: number;

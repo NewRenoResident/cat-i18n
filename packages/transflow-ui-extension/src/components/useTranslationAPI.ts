@@ -26,40 +26,40 @@ export const useTranslationAPI = (apiUrl: string, locale: string) => {
   });
 
   // Запрос на получение детальной информации о переводе
-  const { isLoading: isLoadingDetails } = useQuery<TranslationDetail>({
-    queryKey: ["translationDetail", selectedKey, locale],
-    queryFn: async () => {
-      if (!selectedKey) throw new Error("No key selected");
+  // const { isLoading: isLoadingDetails } = useQuery<TranslationDetail>({
+  //   queryKey: ["translationDetail", selectedKey, locale],
+  //   queryFn: async () => {
+  //     if (!selectedKey) throw new Error("No key selected");
 
-      const response = await fetch(
-        `${apiUrl}/api/translations/translation/tags?key=${encodeURIComponent(selectedKey)}&locale=${locale}`
-      );
+  //     const response = await fetch(
+  //       `${apiUrl}/api/translations/translation/tags?key=${encodeURIComponent(selectedKey)}&locale=${locale}`
+  //     );
 
-      if (!response.ok) {
-        // Если детали недоступны, используем значение из общего списка переводов
-        setEditValue(translations[selectedKey] || "");
-        throw new Error("Failed to fetch translation details");
-      }
+  //     if (!response.ok) {
+  //       // Если детали недоступны, используем значение из общего списка переводов
+  //       setEditValue(translations[selectedKey] || "");
+  //       throw new Error("Failed to fetch translation details");
+  //     }
 
-      const details = await response.json();
-      setEditValue(details.value);
-      return details;
-    },
-    enabled: !!selectedKey && !!locale,
-  });
+  //     const details = await response.json();
+  //     setEditValue(details.value);
+  //     return details;
+  //   },
+  //   enabled: !!selectedKey && !!locale,
+  // });
 
-  useEffect(() => {
-    if (selectedKey && isLoadingDetails === false) {
-      const queryState = queryClient.getQueryState([
-        "translationDetail",
-        selectedKey,
-        locale,
-      ]);
-      if (queryState?.status === "error") {
-        setEditValue(translations[selectedKey] || "");
-      }
-    }
-  }, [selectedKey, isLoadingDetails, queryClient, locale, translations]);
+  // useEffect(() => {
+  //   if (selectedKey === false) {
+  //     const queryState = queryClient.getQueryState([
+  //       "translationDetail",
+  //       selectedKey,
+  //       locale,
+  //     ]);
+  //     if (queryState?.status === "error") {
+  //       setEditValue(translations[selectedKey] || "");
+  //     }
+  //   }
+  // }, [selectedKey, queryClient, locale, translations]);
 
   // Мутация для сохранения изменений перевода
   const { mutate: saveChanges, isPending: isSaving } = useMutation({
@@ -112,7 +112,7 @@ export const useTranslationAPI = (apiUrl: string, locale: string) => {
     saveChanges();
   };
 
-  const isLoading = isLoadingTranslations || isLoadingDetails || isSaving;
+  const isLoading = isLoadingTranslations || isSaving;
 
   return {
     translations,

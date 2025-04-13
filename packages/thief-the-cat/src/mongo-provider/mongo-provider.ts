@@ -148,6 +148,40 @@ export class MongoDBAdapter implements StorageProvider {
       return false;
     }
   }
+  async updateLocale(locale: LocaleDocument): Promise<boolean> {
+    await this.ensureConnected();
+    if (!this.localeCollection) {
+      console.error("Locale collection is not available in updateLocale.");
+      return false;
+    }
+    try {
+      const updateResult = await this.localeCollection.updateOne(
+        { code: locale.code },
+        { $set: { name: locale.name, nativeName: locale.nativeName } }
+      );
+
+      // updateOne returns an object with matchedCount and modifiedCount.
+      // We check matchedCount to see if a document with the code was found.
+      if (updateResult.matchedCount === 0) {
+        console.warn(`Locale with code "${locale.code}" not found for update.`);
+        return false; // Locale with the given code wasn't found
+      }
+
+      // Optional: Log if modification occurred (matchedCount > 0 implies it was found)
+      if (updateResult.modifiedCount > 0) {
+        console.log(`Locale with code "${locale.code}" updated successfully.`);
+      } else {
+        console.log(
+          `Locale with code "${locale.code}" found, but data was already up-to-date.`
+        );
+      }
+
+      return true; // Locale found and update attempt was made (even if data was the same)
+    } catch (error) {
+      console.error(`Error updating locale with code "${locale.code}":`, error);
+      return false;
+    }
+  }
 
   /**
    * Получение информации о локали

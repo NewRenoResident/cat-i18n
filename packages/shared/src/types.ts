@@ -10,8 +10,8 @@ export interface VersionInfo {
 
 export interface LocaleDocument {
   code: string;
-  name: string;
-  nativeName: string;
+  name?: string;
+  nativeName?: string;
 }
 export interface TaggedTranslationEntry extends TranslationEntry {
   tags?: string[];
@@ -31,6 +31,8 @@ export abstract class StorageProvider {
     }
   ): Promise<string | undefined>;
 
+  abstract removeLocale(code: string): Promise<boolean>;
+
   /**
    * Получение перевода по ключу вместе с тегами
    */
@@ -45,6 +47,8 @@ export abstract class StorageProvider {
   ): Promise<TaggedTranslationEntry | undefined>;
 
   abstract addLocale(locale: LocaleDocument): Promise<boolean>;
+
+  abstract updateLocale(locale: LocaleDocument): Promise<boolean>;
 
   /**
    * Сохранение перевода с информацией о версии и опциональными тегами

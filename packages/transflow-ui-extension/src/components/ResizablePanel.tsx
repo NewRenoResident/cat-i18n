@@ -10,6 +10,7 @@ export const ResizablePanel = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
   borderTop: `1px solid ${theme.palette.divider}`,
   padding: theme.spacing(2),
+  borderRadius: 12,
   zIndex: 1000,
   display: "flex",
   flexDirection: "column",

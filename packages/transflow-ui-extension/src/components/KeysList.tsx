@@ -44,14 +44,14 @@ const deleteTranslation = async ({
   return response.json();
 };
 
-export const KeysList: React.FC<KeysListProps> = ({
+export const KeysList = ({
   filteredKeys,
   selectedKey,
   isLoading,
   onSelectKey,
   locale,
   onDeleteSuccess,
-}) => {
+}: KeysListProps) => {
   const queryClient = useQueryClient();
 
   const { mutate, isPending } = useMutation({
@@ -102,36 +102,12 @@ export const KeysList: React.FC<KeysListProps> = ({
           {filteredKeys.map((key) =>
             key === selectedKey ? (
               <ListItem
-                sx={{ paddingX: 2, boxSizing: "border-box", gap: 2 }}
+                sx={{ paddingLeft: 1, paddingRight: 2, gap: 1 }}
                 key={key}
                 disablePadding
-                secondaryAction={
-                  <IconButton
-                    edge="end"
-                    color="error"
-                    onClick={(e) =>
-                      handleDeleteClick(
-                        e as React.MouseEvent<HTMLButtonElement>,
-                        key
-                      )
-                    }
-                    disabled={isPending && keyToDelete === key}
-                  >
-                    {isPending && keyToDelete === key ? (
-                      <CircularProgress size={20} color="error" />
-                    ) : (
-                      <DeleteIcon />
-                    )}
-                  </IconButton>
-                }
               >
                 <SelectedListItem
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    borderRadius: 3,
-                    width: "100%",
-                  }}
+                  sx={{ borderRadius: 2, width: "100%" }}
                   onClick={() => onSelectKey(key)}
                 >
                   <ListItemText
@@ -147,34 +123,32 @@ export const KeysList: React.FC<KeysListProps> = ({
                     title={key}
                   />
                 </SelectedListItem>
+                <IconButton
+                  edge="end"
+                  color="error"
+                  onClick={(e) =>
+                    handleDeleteClick(
+                      e as React.MouseEvent<HTMLButtonElement>,
+                      key
+                    )
+                  }
+                  disabled={isPending && keyToDelete === key}
+                >
+                  {isPending && keyToDelete === key ? (
+                    <CircularProgress size={20} color="error" />
+                  ) : (
+                    <DeleteIcon />
+                  )}
+                </IconButton>
               </ListItem>
             ) : (
               <ListItem
                 key={key}
-                sx={{ paddingX: 2, boxSizing: "border-box", gap: 2 }}
+                sx={{ paddingLeft: 1, paddingRight: 2, gap: 1 }}
                 disablePadding
-                secondaryAction={
-                  <IconButton
-                    edge="end"
-                    color="error"
-                    onClick={(e) =>
-                      handleDeleteClick(
-                        e as React.MouseEvent<HTMLButtonElement>,
-                        key
-                      )
-                    }
-                    disabled={isPending && keyToDelete === key}
-                  >
-                    {isPending && keyToDelete === key ? (
-                      <CircularProgress size={20} color="error" />
-                    ) : (
-                      <DeleteIcon />
-                    )}
-                  </IconButton>
-                }
               >
                 <ListItemButton
-                  sx={{ borderRadius: 3, width: "100%" }}
+                  sx={{ borderRadius: 2, width: "100%" }}
                   onClick={() => onSelectKey(key)}
                 >
                   <ListItemText
@@ -190,6 +164,23 @@ export const KeysList: React.FC<KeysListProps> = ({
                     title={key}
                   />
                 </ListItemButton>
+                <IconButton
+                  edge="end"
+                  color="error"
+                  onClick={(e) =>
+                    handleDeleteClick(
+                      e as React.MouseEvent<HTMLButtonElement>,
+                      key
+                    )
+                  }
+                  disabled={isPending && keyToDelete === key}
+                >
+                  {isPending && keyToDelete === key ? (
+                    <CircularProgress size={20} color="error" />
+                  ) : (
+                    <DeleteIcon />
+                  )}
+                </IconButton>
               </ListItem>
             )
           )}
