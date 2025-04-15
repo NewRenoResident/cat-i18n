@@ -1,6 +1,6 @@
 import { AddTranslationsBody } from "@cat-i18n/shared";
-import { useTranslatorUI } from "../context/TranslatorUIContext";
 import { useMutation, UseMutationOptions } from "@tanstack/react-query";
+import { useTranslatorUI } from "../../context/TranslatorUIContext";
 
 export type AddTranslationResponse = {
   success: boolean;

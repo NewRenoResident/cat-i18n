@@ -18,6 +18,7 @@ import {
   FormControl,
   InputLabel,
   IconButton,
+  Button,
 } from "@mui/material";
 
 import { KeysList } from "./KeysList";
@@ -29,6 +30,7 @@ import { AddLocale } from "../features/add-locale/ui/addLocale";
 import { RemoveLocale } from "../features/remove-locale/remove-locale";
 import { UpdateLocale } from "../features/update-locale/update-locale";
 import { TranslationEditor } from "../features/translation-editor/translation-editor";
+import { AddNewKey } from "../features/add-new-key/add-new-key";
 
 export const TranslatorPanel = () => {
   const { locale, setLocale, getAvailableLocales, availableLocales } =
@@ -184,6 +186,7 @@ export const TranslatorPanel = () => {
               sx={{ mb: 1.5, px: 1, flexShrink: 0 }}
             />
             <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+              <AddNewKey locale={locale} />
               {filteredKeys.length > 0 ? (
                 <KeysList
                   locale={locale}

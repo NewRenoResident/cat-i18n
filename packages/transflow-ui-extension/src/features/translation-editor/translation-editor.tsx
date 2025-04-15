@@ -7,6 +7,9 @@ import {
   TextField,
   styled,
 } from "@mui/material";
+import { useTranslationAPI } from "../../components/useTranslationAPI";
+import { useTranslatorUI } from "../../context/TranslatorUIContext";
+import { useTransFlow } from "@cat-i18n/scottish-fold";
 
 // Custom styled TextField to preserve whitespace and formatting
 const FormattingTextField = styled(TextField)({
@@ -43,6 +46,10 @@ export const TranslationEditor = ({
   onEditValueChange,
   onSaveChanges,
 }: TranslationEditorProps) => {
+  const { apiUrl } = useTranslatorUI();
+  const { locale } = useTransFlow();
+
+  const { translations } = useTranslationAPI(apiUrl, locale);
   return (
     <Paper elevation={2} sx={{ p: 3, borderRadius: 2 }}>
       <Typography variant="h6" gutterBottom fontWeight="medium" color="primary">
@@ -56,6 +63,9 @@ export const TranslationEditor = ({
           >
             <Typography variant="body2">
               <strong>Key:</strong> {selectedKey}
+            </Typography>
+            <Typography variant="body1">
+              <strong>Value:</strong> {translations[selectedKey]}
             </Typography>
           </Box>
 
