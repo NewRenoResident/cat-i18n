@@ -25,10 +25,10 @@ import { useResizablePanel } from "./useResizablePanel";
 import { useTranslationAPI } from "./useTranslationAPI";
 import { ResizablePanel } from "./ResizablePanel";
 import { ResizeHandle } from "./ResizeHandle";
-import { TranslationEditor } from "./TranslationEditor";
 import { AddLocale } from "../features/add-locale/ui/addLocale";
 import { RemoveLocale } from "../features/remove-locale/remove-locale";
 import { UpdateLocale } from "../features/update-locale/update-locale";
+import { TranslationEditor } from "../features/translation-editor/translation-editor";
 
 export const TranslatorPanel = () => {
   const { locale, setLocale, getAvailableLocales, availableLocales } =

@@ -27,7 +27,6 @@ async function startServer() {
       app, // используем существующий экземпляр Express
       basePath: "/api/translations", // базовый путь для API
       enableCors: true, // включаем CORS
-      enableLogging: true, // включаем логирование запросов
     });
 
     // 5. Инициализируем API адаптер и настраиваем маршруты

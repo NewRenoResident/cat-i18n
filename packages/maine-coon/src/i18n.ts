@@ -15,11 +15,11 @@ import { DateFormatter, NumberFormatter } from "./formatters";
  * Cache manager class to handle all cache operations
  */
 export class CacheManager {
-  private cache: LocaleData = {};
+  private cache: Record<string, Record<string, string>> = {};
   private enabled: boolean;
-
-  constructor(enabled: boolean = true) {
-    this.enabled = enabled;
+  // TODO: починить менеджер кеша и вернуть
+  constructor(enabled: boolean) {
+    this.enabled = false;
   }
 
   /**
@@ -39,7 +39,7 @@ export class CacheManager {
   /**
    * Get value from cache
    * @param locale Locale code
-   * @param key Translation key (can be nested using dot notation)
+   * @param key Translation key (with dot notation still supported in API)
    * @returns Cached translation or undefined if not found
    */
   get(locale: string, key: string): string | undefined {
@@ -47,25 +47,13 @@ export class CacheManager {
       return undefined;
     }
 
-    const parts = key.split(".");
-    let current: any = this.cache[locale];
-
-    // Navigate through nested keys
-    for (const part of parts) {
-      if (current[part] === undefined) {
-        return undefined;
-      }
-      current = current[part];
-    }
-
-    // Return only if it's a string
-    return typeof current === "string" ? current : undefined;
+    return this.cache[locale][key];
   }
 
   /**
    * Set value in cache
    * @param locale Locale code
-   * @param key Translation key (can be nested using dot notation)
+   * @param key Translation key (with dot notation still supported in API)
    * @param value Translation value
    */
   set(locale: string, key: string, value: string): void {
@@ -78,29 +66,14 @@ export class CacheManager {
       this.cache[locale] = {};
     }
 
-    const parts = key.split(".");
-    let current: any = this.cache[locale];
-
-    // Create path to the needed key if it doesn't exist
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
-
-      if (!current[part] || typeof current[part] !== "object") {
-        current[part] = {};
-      }
-
-      current = current[part];
-    }
-
-    // Set the value
-    const lastPart = parts[parts.length - 1];
-    current[lastPart] = value;
+    // Set the value with the full key
+    this.cache[locale][key] = value;
   }
 
   /**
    * Remove value from cache
    * @param locale Locale code
-   * @param key Translation key (can be nested using dot notation)
+   * @param key Translation key (with dot notation still supported in API)
    * @returns true if value was removed, false otherwise
    */
   remove(locale: string, key: string): boolean {
@@ -108,26 +81,8 @@ export class CacheManager {
       return false;
     }
 
-    const parts = key.split(".");
-    let current: any = this.cache[locale];
-    const path: any[] = [];
-
-    // Find parent object for the key
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
-      path.push(current);
-
-      if (current[part] === undefined || typeof current[part] !== "object") {
-        return false;
-      }
-
-      current = current[part];
-    }
-
-    // Remove key from parent object
-    const lastPart = parts[parts.length - 1];
-    if (current[lastPart] !== undefined) {
-      delete current[lastPart];
+    if (this.cache[locale][key] !== undefined) {
+      delete this.cache[locale][key];
       return true;
     }
 
@@ -137,25 +92,40 @@ export class CacheManager {
   /**
    * Store entire translation map for a locale
    * @param locale Locale code
-   * @param translations Translation map
+   * @param translations Translation map (nested structure)
    */
-  setTranslations(locale: string, translations: TranslationMap): void {
+  setTranslations(locale: string, translations: object): void {
     if (!this.enabled) {
       return;
     }
-    this.cache[locale] = { ...translations };
+
+    // Convert nested structure to flat keys
+    this.cache[locale] = this.flattenTranslations(translations);
   }
 
   /**
    * Get entire translation map for a locale
    * @param locale Locale code
-   * @returns Translation map or undefined if not found
+   * @returns Flat translation map or undefined if not found
    */
-  getTranslations(locale: string): TranslationMap | undefined {
+  getTranslations(locale: string): Record<string, string> | undefined {
     if (!this.enabled) {
       return undefined;
     }
     return this.cache[locale];
+  }
+
+  /**
+   * Get entire translation map for a locale converted back to nested structure
+   * @param locale Locale code
+   * @returns Nested translation map or undefined if not found
+   */
+  getNestedTranslations(locale: string): object | undefined {
+    if (!this.enabled || !this.cache[locale]) {
+      return undefined;
+    }
+
+    return this.unflattenTranslations(this.cache[locale]);
   }
 
   /**
@@ -177,7 +147,7 @@ export class CacheManager {
    * Get all cached locales
    * @returns Object with all cached translations
    */
-  getAllLocales(): LocaleData {
+  getAllLocales(): Record<string, Record<string, string>> {
     return this.cache;
   }
 
@@ -193,9 +163,9 @@ export class CacheManager {
   /**
    * Merge translations into existing cache
    * @param locale Locale code
-   * @param translations Translations to merge
+   * @param translations Translations to merge (nested structure)
    */
-  mergeTranslations(locale: string, translations: TranslationMap): void {
+  mergeTranslations(locale: string, translations: object): void {
     if (!this.enabled) {
       return;
     }
@@ -204,27 +174,73 @@ export class CacheManager {
       this.cache[locale] = {};
     }
 
-    this.recursiveMerge(this.cache[locale], translations);
+    // Convert nested translations to flat format
+    const flatTranslations = this.flattenTranslations(translations);
+
+    // Merge flat translations
+    for (const key in flatTranslations) {
+      this.cache[locale][key] = flatTranslations[key];
+    }
   }
 
   /**
-   * Recursively merge objects
+   * Flatten nested translations into key-value pairs with dot notation
+   * @param obj Nested object to flatten
+   * @param prefix Current key prefix
+   * @returns Flattened object with dot notation keys
    */
-  private recursiveMerge(target: any, source: any): void {
-    for (const key in source) {
+  private flattenTranslations(
+    obj: any,
+    prefix: string = ""
+  ): Record<string, string> {
+    const result: Record<string, string> = {};
+
+    for (const key in obj) {
+      const newKey = prefix ? `${prefix}.${key}` : key;
+
       if (
-        typeof source[key] === "object" &&
-        source[key] !== null &&
-        !Array.isArray(source[key])
+        typeof obj[key] === "object" &&
+        obj[key] !== null &&
+        !Array.isArray(obj[key])
       ) {
-        if (!target[key] || typeof target[key] !== "object") {
-          target[key] = {};
-        }
-        this.recursiveMerge(target[key], source[key]);
+        // Recursively flatten nested objects
+        const flattened = this.flattenTranslations(obj[key], newKey);
+        Object.assign(result, flattened);
       } else {
-        target[key] = source[key];
+        // Only store string values
+        if (typeof obj[key] === "string") {
+          result[newKey] = obj[key];
+        }
       }
     }
+
+    return result;
+  }
+
+  /**
+   * Convert flat translations back to nested structure
+   * @param flatObj Flat object with dot notation keys
+   * @returns Nested object
+   */
+  private unflattenTranslations(flatObj: Record<string, string>): object {
+    const result: any = {};
+
+    for (const key in flatObj) {
+      const parts = key.split(".");
+      let current = result;
+
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (!current[part]) {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+
+      current[parts[parts.length - 1]] = flatObj[key];
+    }
+
+    return result;
   }
 }
 
@@ -442,6 +458,7 @@ export class I18n {
   ): Promise<TranslationStorage | undefined> {
     // First check cache
     const cachedTranslations = this.cacheManager.getTranslations(locale);
+
     if (cachedTranslations && Object.keys(cachedTranslations).length > 0) {
       // Convert to TranslationStorage format if needed
       return { [locale]: cachedTranslations } as TranslationStorage;
@@ -524,6 +541,8 @@ export class I18n {
       versionInfo,
       tags
     );
+
+    console.log("updatedTranslation", updatedTranslation);
 
     // Update cache with new translation
     this.cacheManager.set(locale, key, value);
@@ -692,24 +711,37 @@ export class I18n {
     versionInfo: VersionMeta,
     tags?: string[]
   ): Promise<TaggedTranslationEntry | undefined> {
+    let lastAddedTranslation: TaggedTranslationEntry | undefined;
+
     for (const key in translations) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
       const value = translations[key];
 
-      return await this.storageProvider.setTranslation(
-        locale,
-        key,
-        value,
-        versionInfo,
-        tags
-      );
+      if (typeof value === "string") {
+        // If value is a string, add to storage with tags
+        lastAddedTranslation = await this.storageProvider.setTranslation(
+          locale,
+          fullKey,
+          value,
+          versionInfo,
+          tags
+        );
+      } else if (typeof value === "object" && value !== null) {
+        // Process nested objects recursively
+        const nestedTranslation = await this.processTranslations(
+          locale,
+          fullKey,
+          value as TranslationMap,
+          versionInfo,
+          tags
+        );
+
+        if (nestedTranslation) {
+          lastAddedTranslation = nestedTranslation;
+        }
+      }
     }
-  }
 
-  setCacheEnabled(enabled: boolean): void {
-    this.cacheManager.setEnabled(enabled);
-  }
-
-  isCacheEnabled(): boolean {
-    return this.cacheManager.isEnabled();
+    return lastAddedTranslation;
   }
 }

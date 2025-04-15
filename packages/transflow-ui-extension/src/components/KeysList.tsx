@@ -10,11 +10,21 @@ import {
   Popover,
   Button,
   Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Fab,
+  Tooltip,
 } from "@mui/material";
 import { ScrollableList } from "./ScrollableList";
 import { SelectedListItem } from "./SelectedListItem";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAddTranslation } from "../hooks/useAddTranslation";
+import { AddTranslationsBody } from "@cat-i18n/shared";
 
 interface KeysListProps {
   filteredKeys: string[];
@@ -44,6 +54,104 @@ const deleteTranslation = async ({
   return response.json();
 };
 
+// Компонент диалога для добавления перевода
+const AddTranslationDialog = ({
+  open,
+  onClose,
+  locale,
+}: {
+  open: boolean;
+  onClose: () => void;
+  locale: string;
+}) => {
+  const [key, setKey] = useState("");
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<{ key?: string; value?: string }>({});
+
+  const queryClient = useQueryClient();
+
+  // Используем наш хук useAddTranslation
+  const addTranslationMutation = useAddTranslation({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["translations"] });
+      onClose();
+      setKey("");
+      setValue("");
+      setError({});
+    },
+    onError: (error) => {
+      console.error("Failed to add translation:", error);
+    },
+  });
+
+  const handleSubmit = () => {
+    const newErrors: { key?: string; value?: string } = {};
+
+    if (!key.trim()) {
+      newErrors.key = "Ключ не может быть пустым";
+    }
+
+    setError(newErrors);
+
+    if (Object.keys(newErrors).length === 0) {
+      const translationData: AddTranslationsBody = {
+        locale,
+        translations: { [key]: value },
+        userId: "current-user-id",
+      };
+
+      addTranslationMutation.mutate(translationData);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Добавить перевод</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            label="Ключ перевода"
+            fullWidth
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            error={!!error.key}
+            helperText={error.key}
+            disabled={addTranslationMutation.isPending}
+          />
+          <TextField
+            label="Значение перевода"
+            fullWidth
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            error={!!error.value}
+            helperText={error.value}
+            disabled={addTranslationMutation.isPending}
+            multiline
+            rows={4}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={addTranslationMutation.isPending}>
+          Отмена
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={addTranslationMutation.isPending}
+          startIcon={
+            addTranslationMutation.isPending ? (
+              <CircularProgress size={20} />
+            ) : null
+          }
+        >
+          {addTranslationMutation.isPending ? "Добавление..." : "Добавить"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 export const KeysList = ({
   filteredKeys,
   selectedKey,
@@ -53,6 +161,7 @@ export const KeysList = ({
   onDeleteSuccess,
 }: KeysListProps) => {
   const queryClient = useQueryClient();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const { mutate, isPending } = useMutation({
     mutationFn: deleteTranslation,
@@ -92,7 +201,7 @@ export const KeysList = ({
   const open = Boolean(anchorEl);
 
   return (
-    <>
+    <Box sx={{ position: "relative", height: "100%" }}>
       {isLoading ? (
         <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
           <CircularProgress size={24} />
@@ -187,6 +296,18 @@ export const KeysList = ({
         </ScrollableList>
       )}
 
+      {/* Кнопка добавления перевода */}
+      <Tooltip title="Добавить перевод">
+        <Fab
+          color="primary"
+          size="small"
+          sx={{ position: "absolute", bottom: 16, right: 16 }}
+          onClick={() => setIsAddDialogOpen(true)}
+        >
+          <AddIcon />
+        </Fab>
+      </Tooltip>
+
       {/* Delete Confirmation Popover */}
       <Popover
         open={open}
@@ -221,6 +342,13 @@ export const KeysList = ({
           </Stack>
         </Box>
       </Popover>
-    </>
+
+      {/* Диалог добавления перевода */}
+      <AddTranslationDialog
+        open={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        locale={locale}
+      />
+    </Box>
   );
 };

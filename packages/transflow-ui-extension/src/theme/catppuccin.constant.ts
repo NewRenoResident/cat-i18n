@@ -1,6 +1,6 @@
 import { createTheme, Theme } from "@mui/material";
 
-const catppuccinFrappe = {
+export const catppuccinFrappe = {
   rosewater: "#f2d5cf",
   flamingo: "#eebebe",
   pink: "#f4b8e4",
@@ -77,6 +77,7 @@ export const catppuccinTheme: Theme = createTheme({
       "sans-serif",
     ].join(","),
   },
+
   components: {
     MuiButton: {
       styleOverrides: {

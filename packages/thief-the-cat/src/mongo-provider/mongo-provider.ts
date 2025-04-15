@@ -255,6 +255,7 @@ export class MongoDBAdapter implements StorageProvider {
     const locales = await this.localeCollection!.findOne({
       code: locale,
     });
+
     if (locales) {
       const documents = await this.collection!.find({
         locale: locales._id,
@@ -289,7 +290,14 @@ export class MongoDBAdapter implements StorageProvider {
   ): Promise<string | undefined> {
     await this.ensureConnected();
 
-    const doc = await this.collection!.findOne({ locale, key });
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
+
+    const doc = await this.collection!.findOne({
+      locale: locales._id,
+      key,
+    });
 
     if (!doc) {
       return undefined;
@@ -350,7 +358,14 @@ export class MongoDBAdapter implements StorageProvider {
   ): Promise<TaggedTranslationEntry | undefined> {
     await this.ensureConnected();
 
-    const doc = await this.collection!.findOne({ locale, key });
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
+
+    const doc = await this.collection!.findOne({
+      locale: locales._id,
+      key,
+    });
 
     if (!doc) {
       return undefined;
@@ -420,8 +435,14 @@ export class MongoDBAdapter implements StorageProvider {
       value,
     };
 
-    // Ищем существующий документ
-    const existingDoc = await this.collection!.findOne({ locale, key });
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
+
+    const existingDoc = await this.collection!.findOne({
+      locale: locales._id,
+      key,
+    });
 
     if (existingDoc) {
       // Добавляем новую версию к существующим
@@ -432,7 +453,7 @@ export class MongoDBAdapter implements StorageProvider {
 
       // Обновляем документ с учетом тегов (если предоставлены)
       await this.collection!.updateOne(
-        { locale, key },
+        { locale: locales._id },
         {
           $set: {
             value,
@@ -443,8 +464,8 @@ export class MongoDBAdapter implements StorageProvider {
       );
     } else {
       // Создаем новый документ с тегами (если предоставлены)
-      await this.collection!.insertOne({
-        locale,
+      const collection = await this.collection!.insertOne({
+        locale: locales._id,
         key,
         value,
         versions: [versionInfo],
@@ -667,7 +688,14 @@ export class MongoDBAdapter implements StorageProvider {
   ): Promise<VersionInfo[] | undefined> {
     await this.ensureConnected();
 
-    const doc = await this.collection!.findOne({ locale, key });
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
+
+    const doc = await this.collection!.findOne({
+      locale: locales._id,
+      key,
+    });
     return doc ? doc.versions : undefined;
   }
 
@@ -680,7 +708,14 @@ export class MongoDBAdapter implements StorageProvider {
   ): Promise<VersionInfo | undefined> {
     await this.ensureConnected();
 
-    const doc = await this.collection!.findOne({ locale, key });
+    const locales = await this.localeCollection!.findOne({
+      code: locale,
+    });
+
+    const doc = await this.collection!.findOne({
+      locale: locales._id,
+      key,
+    });
     return doc && doc.versions.length > 0 ? doc.versions[0] : undefined;
   }
 

@@ -18,109 +18,26 @@ import {
 // Assume I18n interface/class includes `removeLocale` method
 import { I18n } from "@cat-i18n/maine-coon";
 
-// Define Zod Schemas for validation
-const Schemas = {
-  // Params Schemas
-  localeParam: z.object({
-    locale: z
-      .string({ required_error: "Locale parameter is required" })
-      .min(1, "Locale parameter cannot be empty"),
-  }),
-  localeAndKeyParams: z.object({
-    locale: z
-      .string({ required_error: "Locale parameter is required" })
-      .min(1, "Locale parameter cannot be empty"),
-    key: z
-      .string({ required_error: "Key parameter is required" })
-      .min(1, "Key parameter cannot be empty"),
-  }),
-
-  // Query Schemas
-  keyAndLocaleQuery: z.object({
-    key: z
-      .string({ required_error: "Key query parameter is required" })
-      .min(1, "Key query parameter cannot be empty"),
-    locale: z
-      .string({ required_error: "Locale query parameter is required" })
-      .min(1, "Locale query parameter cannot be empty"),
-  }),
-  translationRequestQuery: z.object({
-    key: z
-      .string({ required_error: "Key query parameter is required" })
-      .min(1, "Key query parameter cannot be empty"),
-    locale: z
-      .string({ required_error: "Locale query parameter is required" })
-      .min(1, "Locale query parameter cannot be empty"),
-    userId: z.string().min(1, "userId must be a non-empty string").optional(),
-    versionTag: z
-      .string()
-      .min(1, "versionTag must be a non-empty string")
-      .optional(),
-    // Validate timestamp as a string, then transform to number
-    timestamp: z
-      .string()
-      .refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-        message: "timestamp must be a positive number string",
-      })
-      .transform(Number) // Convert to number after validation
-      .optional(),
-  }),
-
-  // Body Schemas
-  addLocalesBody: z.object({
-    code: z
-      .string({ required_error: "code is required" })
-      .min(1, "code cannot be empty"),
-    name: z
-      .string()
-      .min(1, "If provided, name must be a non-empty string")
-      .optional(),
-    nativeName: z
-      .string()
-      .min(1, "If provided, nativeName must be a non-empty string")
-      .optional(),
-  }),
-  updateTranslationBody: z.object({
-    key: z
-      .string({ required_error: "key is required" })
-      .min(1, "key cannot be empty"),
-    locale: z
-      .string({ required_error: "locale is required" })
-      .min(1, "locale cannot be empty"),
-    value: z.string({ required_error: "value is required" }), // Allow empty string value
-    userId: z
-      .string({ required_error: "userId is required" })
-      .min(1, "userId cannot be empty"),
-    versionTag: z
-      .string()
-      .min(1, "versionTag must be a non-empty string")
-      .optional(),
-    tags: z
-      .array(z.string().min(1, "All tags must be non-empty strings"))
-      .optional(),
-  }),
-  tagsRequestBody: z.object({
-    key: z
-      .string({ required_error: "key is required" })
-      .min(1, "key cannot be empty"),
-    locale: z
-      .string({ required_error: "locale is required" })
-      .min(1, "locale cannot be empty"),
-    tags: z
-      .array(z.string().min(1, "All tags must be non-empty strings"))
-      .min(1, "tags array cannot be empty"), // Ensure array has at least one tag
-  }),
-  searchByTagsBody: z.object({
-    locale: z
-      .string({ required_error: "locale is required" })
-      .min(1, "locale cannot be empty"),
-    tags: z
-      .array(z.string().min(1, "All tags must be non-empty strings"))
-      .min(1, "tags array cannot be empty"), // Ensure array has at least one tag
-    matchAll: z.boolean().optional(),
-  }),
-};
-
+import {
+  localeParam,
+  localeAndKeyParams,
+  keyAndLocaleQuery,
+  addTranslationsBody,
+  addLocalesBody,
+  updateTranslationBody,
+  tagsRequestBody,
+  searchByTagsBody,
+  translationRequestQuery,
+  LocaleParam,
+  LocaleAndKeyParams,
+  KeyAndLocaleQuery,
+  AddTranslationsBody,
+  AddLocalesBody,
+  UpdateTranslationBody,
+  TagsRequestBody,
+  SearchByTagsBody,
+  TranslationRequestQuery,
+} from "@cat-i18n/shared";
 /**
  * Опции для Express API адаптера
  */
@@ -327,23 +244,29 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     // GET /locales - получение списка доступных локалей
     this.router.get("/locales", this.handleGetLocales.bind(this));
 
+    this.router.post(
+      "/translations",
+      this.validateBody(addTranslationsBody),
+      this.handleAddTranslations.bind(this)
+    );
+
     // POST /locales - добавление новой локали
     this.router.post(
       "/locales",
-      this.validateBody(Schemas.addLocalesBody), // Validate body
+      this.validateBody(addLocalesBody), // Validate body
       this.handleAddLocales.bind(this)
     );
 
     // DELETE /locales/:locale - удаление локали // *** NEW ROUTE ***
     this.router.delete(
       "/locales/:locale",
-      this.validateParams(Schemas.addLocalesBody), // Validate route parameter 'locale'
+      this.validateParams(addLocalesBody), // Validate route parameter 'locale'
       this.handleRemoveLocale.bind(this)
     );
 
     this.router.put(
       "/locales/:locale",
-      this.validateParams(Schemas.localeParam), // Validate route parameter 'locale'
+      this.validateParams(localeParam), // Validate route parameter 'locale'
       this.handleUpdateLocale.bind(this)
     );
 
@@ -351,35 +274,35 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     // GET /translations/:locale - получение всех переводов для локали
     this.router.get(
       "/translations/:locale",
-      this.validateParams(Schemas.localeParam), // Validate route params
+      this.validateParams(localeParam), // Validate route params
       this.handleGetAllTranslations.bind(this)
     );
 
     // GET /translation - получение конкретного перевода
     this.router.get(
       "/translation",
-      this.validateQuery(Schemas.translationRequestQuery), // Validate query params
+      this.validateQuery(translationRequestQuery), // Validate query params
       this.handleGetTranslation.bind(this)
     );
 
     // GET /translation/tags - получение перевода с тегами
     this.router.get(
       "/translation/tags",
-      this.validateQuery(Schemas.translationRequestQuery), // Validate query params
+      this.validateQuery(translationRequestQuery), // Validate query params
       this.handleGetTranslationWithTags.bind(this)
     );
 
     // POST /translation - создание/обновление перевода
     this.router.post(
       "/translation",
-      this.validateBody(Schemas.updateTranslationBody), // Validate body
+      this.validateBody(updateTranslationBody),
       this.handleUpdateTranslation.bind(this)
     );
 
     // DELETE /translation - удаление перевода
     this.router.delete(
       "/translation",
-      this.validateQuery(Schemas.keyAndLocaleQuery), // Validate query params
+      this.validateQuery(keyAndLocaleQuery), // Validate query params
       this.handleRemoveTranslation.bind(this)
     );
 
@@ -387,14 +310,14 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     // GET /translation/versions/:locale/:key - получение истории версий перевода
     this.router.get(
       "/translation/versions/:locale/:key",
-      this.validateParams(Schemas.localeAndKeyParams), // Validate route params
+      this.validateParams(localeAndKeyParams), // Validate route params
       this.handleGetVersionHistory.bind(this)
     );
 
     // GET /translation/latest/:locale/:key - получение последней версии перевода
     this.router.get(
       "/translation/latest/:locale/:key",
-      this.validateParams(Schemas.localeAndKeyParams), // Validate route params
+      this.validateParams(localeAndKeyParams), // Validate route params
       this.handleGetLatestVersion.bind(this)
     );
 
@@ -405,42 +328,42 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     // GET /tags/:locale - получение всех тегов для локали
     this.router.get(
       "/tags/:locale",
-      this.validateParams(Schemas.localeParam), // Validate route params
+      this.validateParams(localeParam), // Validate route params
       this.handleGetTagsByLocale.bind(this)
     );
 
     // POST /tags - добавление тегов к переводу
     this.router.post(
       "/tags",
-      this.validateBody(Schemas.tagsRequestBody), // Validate body
+      this.validateBody(tagsRequestBody), // Validate body
       this.handleAddTags.bind(this)
     );
 
     // PUT /tags - обновление тегов перевода
     this.router.put(
       "/tags",
-      this.validateBody(Schemas.tagsRequestBody), // Validate body
+      this.validateBody(tagsRequestBody), // Validate body
       this.handleUpdateTags.bind(this)
     );
 
     // DELETE /tags - удаление тегов из перевода
     this.router.delete(
       "/tags",
-      this.validateBody(Schemas.tagsRequestBody), // Validate body (as per original code)
+      this.validateBody(tagsRequestBody), // Validate body (as per original code)
       this.handleRemoveTags.bind(this)
     );
 
     // POST /search/tags - поиск переводов по тегам
     this.router.post(
       "/search/tags",
-      this.validateBody(Schemas.searchByTagsBody), // Validate body
+      this.validateBody(searchByTagsBody), // Validate body
       this.handleSearchByTags.bind(this)
     );
 
     // POST /count/tags - подсчет переводов по тегам
     this.router.post(
       "/count/tags",
-      this.validateBody(Schemas.searchByTagsBody), // Validate body
+      this.validateBody(searchByTagsBody), // Validate body
       this.handleCountByTags.bind(this)
     );
 
@@ -466,10 +389,39 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     }
   }
 
+  private async handleAddTranslations(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    try {
+      const params = req.body as z.infer<typeof addTranslationsBody>;
+
+      const result = await this.i18n.addTranslations(
+        params.locale,
+        params.translations,
+        params.userId,
+        params.versionTag,
+        params.tags
+      );
+
+      this.sendSuccess(
+        res,
+        {
+          success: true,
+          message: `Successfully added ${Object.keys(params.translations).length} translations to locale '${params.locale}'`,
+          result,
+        },
+        201
+      ); // Используем 201 Created для создания ресурсов
+    } catch (error) {
+      this.sendError(res, error);
+    }
+  }
+
   private async handleAddLocales(req: Request, res: Response): Promise<void> {
     try {
       const { code, name, nativeName } = req.body as z.infer<
-        typeof Schemas.addLocalesBody
+        typeof addLocalesBody
       >;
       const result = await this.i18n.addLocale({ code, name, nativeName });
       this.sendSuccess(res, result, 201); // Use 201 Created status
@@ -480,10 +432,8 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleUpdateLocale(req: Request, res: Response): Promise<void> {
     try {
-      const { locale } = req.params as z.infer<typeof Schemas.localeParam>;
-      const { name, nativeName } = req.body as z.infer<
-        typeof Schemas.addLocalesBody
-      >;
+      const { locale } = req.params as z.infer<typeof localeParam>;
+      const { name, nativeName } = req.body as z.infer<typeof addLocalesBody>;
 
       const updated = await this.i18n.updateLocale({
         code: locale,
@@ -507,7 +457,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleRemoveLocale(req: Request, res: Response): Promise<void> {
     try {
-      const { locale } = req.params as z.infer<typeof Schemas.localeParam>;
+      const { locale } = req.params as z.infer<typeof localeParam>;
 
       const success = await this.i18n.removeLocale(locale);
 
@@ -534,7 +484,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       // req.params is validated
-      const { locale } = req.params as z.infer<typeof Schemas.localeParam>;
+      const { locale } = req.params as z.infer<typeof localeParam>;
       const translations = await this.i18n.getAllTranslations(locale);
       this.sendSuccess(res, translations);
     } catch (error) {
@@ -547,10 +497,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.query is validated and timestamp is transformed to number
-      const params = req.query as z.infer<
-        typeof Schemas.translationRequestQuery
-      >;
+      const params = req.query as unknown as TranslationRequestQuery;
 
       const options = {
         userId: params.userId,
@@ -593,9 +540,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       // req.query is validated and timestamp is transformed to number
-      const params = req.query as z.infer<
-        typeof Schemas.translationRequestQuery
-      >;
+      const params = req.query as z.infer<typeof translationRequestQuery>;
 
       const options = {
         userId: params.userId,
@@ -632,7 +577,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       // req.body is validated
-      const params = req.body as z.infer<typeof Schemas.updateTranslationBody>;
+      const params = req.body as z.infer<typeof updateTranslationBody>;
 
       const updatedTranslation = await this.i18n.updateTranslation(
         params.locale,
@@ -654,9 +599,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      const { key, locale } = req.query as z.infer<
-        typeof Schemas.keyAndLocaleQuery
-      >;
+      const { key, locale } = req.query as z.infer<typeof keyAndLocaleQuery>;
 
       const result = await this.i18n.removeTranslation(locale, key);
       if (result) {
@@ -684,9 +627,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       // req.params is validated
-      const { locale, key } = req.params as z.infer<
-        typeof Schemas.localeAndKeyParams
-      >;
+      const { locale, key } = req.params as z.infer<typeof localeAndKeyParams>;
       const versions = await this.i18n.getVersionHistory(locale, key);
       if (!versions || versions.length === 0) {
         this.sendError(
@@ -710,9 +651,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       // req.params is validated
-      const { locale, key } = req.params as z.infer<
-        typeof Schemas.localeAndKeyParams
-      >;
+      const { locale, key } = req.params as z.infer<typeof localeAndKeyParams>;
       const version = await this.i18n.getLatestVersion(locale, key);
       if (!version) {
         this.sendError(
@@ -745,7 +684,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       // req.params is validated
-      const { locale } = req.params as z.infer<typeof Schemas.localeParam>;
+      const { locale } = req.params as z.infer<typeof localeParam>;
       const tags = await this.i18n.listAllTags(locale);
       this.sendSuccess(res, tags);
     } catch (error) {
@@ -756,7 +695,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleAddTags(req: Request, res: Response): Promise<void> {
     try {
       // req.body is validated
-      const params = req.body as z.infer<typeof Schemas.tagsRequestBody>;
+      const params = req.body as z.infer<typeof tagsRequestBody>;
 
       const result = await this.i18n.addTagsToTranslation(
         params.locale,
@@ -788,7 +727,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleUpdateTags(req: Request, res: Response): Promise<void> {
     try {
       // req.body is validated
-      const params = req.body as z.infer<typeof Schemas.tagsRequestBody>;
+      const params = req.body as z.infer<typeof tagsRequestBody>;
 
       const result = await this.i18n.updateTranslationTags(
         params.locale,
@@ -820,7 +759,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleRemoveTags(req: Request, res: Response): Promise<void> {
     try {
       // req.body is validated (as per original structure)
-      const params = req.body as z.infer<typeof Schemas.tagsRequestBody>;
+      const params = req.body as z.infer<typeof tagsRequestBody>;
 
       const result = await this.i18n.removeTagsFromTranslation(
         params.locale,
@@ -854,7 +793,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleSearchByTags(req: Request, res: Response): Promise<void> {
     try {
       // req.body is validated
-      const params = req.body as z.infer<typeof Schemas.searchByTagsBody>;
+      const params = req.body as z.infer<typeof searchByTagsBody>;
 
       const translations = await this.i18n.getTranslationsByTags(
         params.locale,
@@ -871,7 +810,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleCountByTags(req: Request, res: Response): Promise<void> {
     try {
       // req.body is validated
-      const params = req.body as z.infer<typeof Schemas.searchByTagsBody>;
+      const params = req.body as z.infer<typeof searchByTagsBody>;
 
       const count = await this.i18n.countTranslationsByTags(
         params.locale,
