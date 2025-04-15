@@ -185,8 +185,8 @@ export const TranslatorPanel = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               sx={{ mb: 1.5, px: 1, flexShrink: 0 }}
             />
+            <AddNewKey locale={locale} />
             <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-              <AddNewKey locale={locale} />
               {filteredKeys.length > 0 ? (
                 <KeysList
                   locale={locale}
