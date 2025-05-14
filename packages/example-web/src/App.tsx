@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   TransFlowProvider,
-  Trans,
+  Trans, // Убедитесь, что Trans импортирован
   useTransFlow,
 } from "@cat-i18n/scottish-fold";
 
@@ -12,22 +12,17 @@ import {
   TranslatorToggle,
 } from "@cat-i18n/transflow-ui-extension";
 
-// Наш демонстрационный компонент с переводами
 function DemoApp() {
-  const { t, setLocale, locale, getAvailableLocales } = useTransFlow();
+  const { setLocale, locale, getAvailableLocales } = useTransFlow();
   const [locales, setLocales] = useState<string[]>([]);
   const [selectedLocale, setSelectedLocale] = useState("");
 
   useEffect(() => {
-    // Загружаем доступные локали
     const loadLocales = async () => {
       const availableLocales = await getAvailableLocales();
-
       setLocales(availableLocales);
-
       setSelectedLocale(locale);
     };
-
     loadLocales();
   }, [getAvailableLocales, locale]);
 
@@ -39,20 +34,19 @@ function DemoApp() {
 
   const userName = "Алексей";
   const unreadMessages = 5;
+  const currentYear = new Date().getFullYear(); // Вычисляем год один раз
 
   return (
     <div className="demo-app">
       <header className="app-header">
-        <div className="logo">TransFlow Demo</div>
+        <div className="logo">
+          <Trans id="header.logo.text" defaultMessage="TransFlow Demo" />
+        </div>
         <div className="locale-selector">
           <select value={selectedLocale} onChange={handleLocaleChange}>
-            {locales.map((locale) => (
-              <option key={locale} value={locale}>
-                {locale === "ru"
-                  ? "Русский"
-                  : locale === "en"
-                    ? "English"
-                    : locale}
+            {locales.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc === "ru" ? "Русский" : loc === "en" ? "English" : loc}
               </option>
             ))}
           </select>
@@ -61,7 +55,10 @@ function DemoApp() {
 
       <main className="app-content">
         <section className="welcome-section">
-          <h1>{t("welcome.title")}</h1>
+          {/* Заменяем t() на Trans */}
+          <h1>
+            <Trans id="welcome.title" />
+          </h1>
           <p>
             <Trans
               id="welcome.message"
@@ -76,28 +73,49 @@ function DemoApp() {
         </section>
 
         <section className="features-section">
-          <h2>{t("features.title")}</h2>
+          <h2>
+            <Trans id="features.title" />
+          </h2>
           <div className="feature-cards">
             <div className="feature-card">
-              <h3>{t("features.card1.title")}</h3>
-              <p>{t("features.card1.description")}</p>
-              <button>{t("common.learnMore")}</button>
+              <h3>
+                <Trans id="features.card1.title" />
+              </h3>
+              <p>
+                <Trans id="features.card1.description" />
+              </p>
+              <button>
+                <Trans id="common.learnMore" />
+              </button>
             </div>
             <div className="feature-card">
-              <h3>{t("features.card2.title")}</h3>
-              <p>{t("features.card2.description")}</p>
-              <button>{t("common.learnMore")}</button>
+              <h3>
+                <Trans id="features.card2.title" />
+              </h3>
+              <p>
+                <Trans id="features.card2.description" />
+              </p>
+              <button>
+                <Trans id="common.learnMore" />
+              </button>
             </div>
             <div className="feature-card">
-              <h3>{t("features.card3.title")}</h3>
-              <p>{t("features.card3.description")}</p>
-              <button>{t("common.learnMore")}</button>
+              <h3>
+                <Trans id="features.card3.title" />
+              </h3>
+              <p>
+                <Trans id="features.card3.description" />
+              </p>
+              <button>
+                <Trans id="common.learnMore" />
+              </button>
             </div>
           </div>
         </section>
 
         <section className="notifications-section">
           <div className="notification">
+            {/* Этот уже использовал Trans, оставляем как есть */}
             <Trans
               id="notifications.unread"
               variables={{ count: unreadMessages }}
@@ -111,27 +129,31 @@ function DemoApp() {
       </main>
 
       <footer className="app-footer">
-        <p>{t("footer.copyright", { year: new Date().getFullYear() })}</p>
+        <p>
+          <Trans id="footer.copyright" variables={{ year: currentYear }} />
+        </p>
         <nav>
-          <a href="/terms">{t("footer.terms")}</a>
-          <a href="/privacy">{t("footer.privacy")}</a>
-          <a href="/contact">{t("footer.contact")}</a>
+          <a href="/terms">
+            <Trans id="footer.terms" />
+          </a>
+          <a href="/privacy">
+            <Trans id="footer.privacy" />
+          </a>
+          <a href="/contact">
+            <Trans id="footer.contact" />
+          </a>
         </nav>
       </footer>
     </div>
   );
 }
 
-// Основной компонент приложения
 export default function App() {
-  // Начальные переводы для демонстрации
-
   return (
     <TransFlowProvider
       options={{
         defaultLocale: "ru",
         fallbackLocale: "en",
-
         apiUrl: "http://localhost:3000",
       }}
     >

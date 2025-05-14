@@ -52,5 +52,6 @@ export const useResizablePanel = (initialHeight = 300) => {
     panelHeight,
     panelRef,
     handleMouseDown,
+    setPanelHeight,
   };
 };

@@ -190,7 +190,6 @@ const AddTranslationDialog = ({
       Object.keys(translationsPayload).length === 0 &&
       translationPairs.length > 0
     ) {
-      console.log("No valid keys to submit.");
     }
   };
 

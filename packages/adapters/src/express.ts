@@ -1,43 +1,34 @@
+import { I18n } from "@cat-i18n/maine-coon";
 import express, {
   Express,
+  NextFunction,
   Request,
   Response,
   Router,
-  NextFunction,
 } from "express";
 import { z, ZodError } from "zod"; // Import Zod
-import {
-  ApiAdapter,
-  ApiResponse,
-  BaseApiAdapter,
-  SearchByTagsRequest,
-  TagsRequest,
-  TranslationRequest,
-  TranslationUpdateRequest,
-} from "./types"; // Assuming types.ts defines these interfaces
-// Assume I18n interface/class includes `removeLocale` method
-import { I18n } from "@cat-i18n/maine-coon";
+import { ApiAdapter, ApiResponse, BaseApiAdapter } from "./types";
 
 import {
-  localeParam,
-  localeAndKeyParams,
-  keyAndLocaleQuery,
-  addTranslationsBody,
   addLocalesBody,
-  updateTranslationBody,
-  tagsRequestBody,
+  addTranslationsBody,
+  AiClient,
+  keyAndLocaleQuery,
+  localeAndKeyParams,
+  localeParam,
   searchByTagsBody,
+  tagsRequestBody,
   translationRequestQuery,
-  LocaleParam,
-  LocaleAndKeyParams,
-  KeyAndLocaleQuery,
-  AddTranslationsBody,
-  AddLocalesBody,
-  UpdateTranslationBody,
-  TagsRequestBody,
-  SearchByTagsBody,
   TranslationRequestQuery,
+  updateTranslationBody,
 } from "@cat-i18n/shared";
+
+const aiTranslateBody = z.object({
+  translateFromLocale: z.string().min(1, "Locale code cannot be empty"),
+  translateToLocale: z.string().min(1, "Locale code cannot be empty"),
+  userId: z.string().min(1, "User ID cannot be empty"),
+});
+
 /**
  * Опции для Express API адаптера
  */
@@ -59,11 +50,20 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private app: Express;
   private server: any; // Server instance
   private router: Router;
+  private aiClient: AiClient;
 
-  constructor(i18n: I18n, options: ExpressAdapterOptions = {}) {
+  constructor(
+    i18n: I18n,
+    aiClient: AiClient,
+    options: ExpressAdapterOptions = {}
+  ) {
     super(i18n);
 
-    // Установка значений по умолчанию
+    if (!aiClient) {
+      throw new Error("AiClient instance is required for ExpressAdapter.");
+    }
+    this.aiClient = aiClient;
+
     this.options = {
       basePath: "/api/i18n",
       port: 3000,
@@ -79,26 +79,21 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     this.router = express.Router();
   }
 
-  /**
-   * Инициализация адаптера и запуск сервера
-   */
   async init(): Promise<void> {
     await super.init();
 
-    // Middleware setup (CORS, Logging, JSON/URL-encoded)
     if (this.options.enableCors) {
       this.app.use(this.options.basePath, (req, res, next) => {
         // Apply CORS only to API routes
         res.header("Access-Control-Allow-Origin", "*");
         res.header(
           "Access-Control-Allow-Headers",
-          "Origin, X-Requested-With, Content-Type, Accept"
+          "Origin, X-Requested-With, Content-Type, Accept, Authorization"
         );
         res.header(
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, PATCH, OPTIONS"
         );
-        // Handle preflight requests
         if (req.method === "OPTIONS") {
           return res.sendStatus(200);
         }
@@ -121,13 +116,10 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
 
-    // Настройка маршрутов
     this.setupRoutes();
 
-    // Монтирование роутера
     this.app.use(this.options.basePath, this.router);
 
-    // Запуск сервера, если не передан внешний экземпляр Express
     if (!this.options.app) {
       // Use original options check here
       return new Promise((resolve) => {
@@ -146,18 +138,14 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
       console.log(
         `${this.options.logPrefix} Attached to existing Express app. Routes available at ${this.options.basePath}`
       );
-      return Promise.resolve(); // Resolve immediately if using external app
+      return Promise.resolve();
     }
   }
 
-  /**
-   * Закрытие сервера
-   */
   async close(): Promise<void> {
     if (this.server) {
       return new Promise((resolve, reject) => {
         this.server.close((err?: Error) => {
-          // Add optional error param type
           if (err) {
             console.error(
               `${this.options.logPrefix} Error closing server:`,
@@ -174,63 +162,46 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     return Promise.resolve();
   }
 
-  // --- Zod Validation Middleware ---
-
-  /**
-   * Middleware for validating request body using a Zod schema.
-   */
   private validateBody =
     (schema: z.ZodSchema<any>) =>
     (req: Request, res: Response, next: NextFunction) => {
       try {
-        // Parse and replace req.body with validated data (incl. transformations)
         req.body = schema.parse(req.body);
         next();
       } catch (error) {
         if (error instanceof ZodError) {
           this.sendZodError(res, error);
         } else {
-          // Pass other errors to the default error handler
           next(error);
         }
       }
     };
 
-  /**
-   * Middleware for validating request query parameters using a Zod schema.
-   */
   private validateQuery =
     (schema: z.ZodSchema<any>) =>
     (req: Request, res: Response, next: NextFunction) => {
       try {
-        // Parse and replace req.query with validated data (incl. transformations)
         req.query = schema.parse(req.query);
         next();
       } catch (error) {
         if (error instanceof ZodError) {
           this.sendZodError(res, error);
         } else {
-          // Pass other errors to the default error handler
           next(error);
         }
       }
     };
 
-  /**
-   * Middleware for validating request route parameters using a Zod schema.
-   */
   private validateParams =
     (schema: z.ZodSchema<any>) =>
     (req: Request, res: Response, next: NextFunction) => {
       try {
-        // Parse and replace req.params with validated data (incl. transformations)
         req.params = schema.parse(req.params);
         next();
       } catch (error) {
         if (error instanceof ZodError) {
           this.sendZodError(res, error);
         } else {
-          // Pass other errors to the default error handler
           next(error);
         }
       }
@@ -240,139 +211,113 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
    * Настройка маршрутов API с использованием Zod валидации
    */
   setupRoutes(): void {
-    // === Locales Routes ===
-    // GET /locales - получение списка доступных локалей
     this.router.get("/locales", this.handleGetLocales.bind(this));
+    this.router.post(
+      "/locales",
+      this.validateBody(addLocalesBody),
+      this.handleAddLocales.bind(this)
+    );
+    this.router.delete(
+      "/locales/:locale",
+      this.validateParams(localeParam),
+      this.handleRemoveLocale.bind(this)
+    );
+    this.router.put(
+      "/locales/:locale",
+      this.validateParams(localeParam),
+      this.validateBody(addLocalesBody),
+      this.handleUpdateLocale.bind(this)
+    );
 
     this.router.post(
       "/translations",
       this.validateBody(addTranslationsBody),
       this.handleAddTranslations.bind(this)
     );
-
-    // POST /locales - добавление новой локали
-    this.router.post(
-      "/locales",
-      this.validateBody(addLocalesBody), // Validate body
-      this.handleAddLocales.bind(this)
-    );
-
-    // DELETE /locales/:locale - удаление локали // *** NEW ROUTE ***
-    this.router.delete(
-      "/locales/:locale",
-      this.validateParams(addLocalesBody), // Validate route parameter 'locale'
-      this.handleRemoveLocale.bind(this)
-    );
-
-    this.router.put(
-      "/locales/:locale",
-      this.validateParams(localeParam), // Validate route parameter 'locale'
-      this.handleUpdateLocale.bind(this)
-    );
-
-    // === Translations Routes ===
-    // GET /translations/:locale - получение всех переводов для локали
     this.router.get(
       "/translations/:locale",
-      this.validateParams(localeParam), // Validate route params
+      this.validateParams(localeParam),
       this.handleGetAllTranslations.bind(this)
     );
-
-    // GET /translation - получение конкретного перевода
     this.router.get(
       "/translation",
-      this.validateQuery(translationRequestQuery), // Validate query params
+      this.validateQuery(translationRequestQuery),
       this.handleGetTranslation.bind(this)
     );
-
-    // GET /translation/tags - получение перевода с тегами
     this.router.get(
       "/translation/tags",
-      this.validateQuery(translationRequestQuery), // Validate query params
+      this.validateQuery(translationRequestQuery),
       this.handleGetTranslationWithTags.bind(this)
     );
-
-    // POST /translation - создание/обновление перевода
     this.router.post(
       "/translation",
       this.validateBody(updateTranslationBody),
       this.handleUpdateTranslation.bind(this)
     );
-
-    // DELETE /translation - удаление перевода
     this.router.delete(
       "/translation",
-      this.validateQuery(keyAndLocaleQuery), // Validate query params
+      this.validateQuery(keyAndLocaleQuery),
       this.handleRemoveTranslation.bind(this)
     );
 
     // === Translation Version Routes ===
-    // GET /translation/versions/:locale/:key - получение истории версий перевода
+    // ... (existing version routes) ...
     this.router.get(
       "/translation/versions/:locale/:key",
-      this.validateParams(localeAndKeyParams), // Validate route params
+      this.validateParams(localeAndKeyParams),
       this.handleGetVersionHistory.bind(this)
     );
-
-    // GET /translation/latest/:locale/:key - получение последней версии перевода
     this.router.get(
       "/translation/latest/:locale/:key",
-      this.validateParams(localeAndKeyParams), // Validate route params
+      this.validateParams(localeAndKeyParams),
       this.handleGetLatestVersion.bind(this)
     );
 
-    // === Tag Routes ===
-    // GET /tags - получение всех тегов
     this.router.get("/tags", this.handleGetAllTags.bind(this));
-
-    // GET /tags/:locale - получение всех тегов для локали
     this.router.get(
       "/tags/:locale",
-      this.validateParams(localeParam), // Validate route params
+      this.validateParams(localeParam),
       this.handleGetTagsByLocale.bind(this)
     );
-
-    // POST /tags - добавление тегов к переводу
     this.router.post(
       "/tags",
-      this.validateBody(tagsRequestBody), // Validate body
+      this.validateBody(tagsRequestBody),
       this.handleAddTags.bind(this)
     );
-
-    // PUT /tags - обновление тегов перевода
     this.router.put(
       "/tags",
-      this.validateBody(tagsRequestBody), // Validate body
+      this.validateBody(tagsRequestBody),
       this.handleUpdateTags.bind(this)
     );
-
-    // DELETE /tags - удаление тегов из перевода
     this.router.delete(
       "/tags",
-      this.validateBody(tagsRequestBody), // Validate body (as per original code)
+      this.validateBody(tagsRequestBody),
       this.handleRemoveTags.bind(this)
-    );
-
-    // POST /search/tags - поиск переводов по тегам
+    ); // Assuming body validation needed as before
     this.router.post(
       "/search/tags",
-      this.validateBody(searchByTagsBody), // Validate body
+      this.validateBody(searchByTagsBody),
       this.handleSearchByTags.bind(this)
     );
-
-    // POST /count/tags - подсчет переводов по тегам
     this.router.post(
       "/count/tags",
-      this.validateBody(searchByTagsBody), // Validate body
+      this.validateBody(searchByTagsBody),
       this.handleCountByTags.bind(this)
     );
 
-    // Centralized Error Handler for unexpected errors passed via next(error)
+    // === AI Translation Route ===
+    // *** ADD NEW AI TRANSLATION ROUTE ***
+    this.router.post(
+      "/ai/translate",
+      this.validateBody(aiTranslateBody), // Validate request body
+      this.handleAiTranslate.bind(this) // Bind the new handler
+    );
+    // *** END NEW ROUTE ***
+
+    // Centralized Error Handler
     this.router.use(
       (err: Error, req: Request, res: Response, next: NextFunction) => {
-        // Log the error stack for debugging server errors
         console.error(`${this.options.logPrefix} Unhandled Error:`, err.stack);
-        // Send a generic 500 error response
         this.sendError(res, "An internal server error occurred.", 500);
       }
     );
@@ -380,6 +325,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   // --- Route Handlers ---
 
+  // ... (existing handlers: handleGetLocales, handleAddTranslations, etc.) ...
   private async handleGetLocales(req: Request, res: Response): Promise<void> {
     try {
       const locales = await this.i18n.getAvailableLocales(); // Assume async
@@ -408,11 +354,11 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
         res,
         {
           success: true,
-          message: `Successfully added ${Object.keys(params.translations).length} translations to locale '${params.locale}'`,
-          result,
+          message: `Successfully initiated adding ${Object.keys(params.translations).length} translation keys/prefixes to locale '${params.locale}'. Check result field for details.`,
+          result, // result is TaggedTranslationEntry | undefined
         },
-        201
-      ); // Используем 201 Created для создания ресурсов
+        201 // Use 201 Created
+      );
     } catch (error) {
       this.sendError(res, error);
     }
@@ -424,7 +370,15 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
         typeof addLocalesBody
       >;
       const result = await this.i18n.addLocale({ code, name, nativeName });
-      this.sendSuccess(res, result, 201); // Use 201 Created status
+      if (result) {
+        this.sendSuccess(res, { code, name, nativeName, created: true }, 201); // Use 201 Created status
+      } else {
+        this.sendError(
+          res,
+          new Error(`Failed to add locale '${code}'. It might already exist.`),
+          409
+        ); // Conflict
+      }
     } catch (error) {
       this.sendError(res, error);
     }
@@ -433,22 +387,28 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleUpdateLocale(req: Request, res: Response): Promise<void> {
     try {
       const { locale } = req.params as z.infer<typeof localeParam>;
-      const { name, nativeName } = req.body as z.infer<typeof addLocalesBody>;
+      // Body contains optional name/nativeName
+      const { name, nativeName } = req.body as Partial<
+        z.infer<typeof addLocalesBody>
+      >;
 
       const updated = await this.i18n.updateLocale({
         code: locale,
-        name,
-        nativeName,
+        name, // Pass undefined if not provided
+        nativeName, // Pass undefined if not provided
       });
 
       if (updated) {
-        this.sendSuccess(res, { success: true });
-      } else {
-        res.status(404).json({
-          success: false,
-          message: `Locale with code '${locale}' not found.`,
+        this.sendSuccess(res, {
+          updated: true,
+          message: `Locale '${locale}' updated.`,
         });
-        return;
+      } else {
+        this.sendError(
+          res,
+          new Error(`Locale with code '${locale}' not found.`),
+          404
+        );
       }
     } catch (error) {
       this.sendError(res, error);
@@ -457,15 +417,12 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleRemoveLocale(req: Request, res: Response): Promise<void> {
     try {
-      const { locale } = req.params as z.infer<typeof localeParam>;
-
+      const { locale } = req.params as z.infer<typeof localeParam>; // Use validated params
       const success = await this.i18n.removeLocale(locale);
 
       if (success) {
-        this.sendSuccess(res, {
-          message: `Locale '${locale}' removed successfully.`,
-          deleted: true,
-        });
+        // Use 204 No Content for successful deletion with no response body
+        res.status(204).send();
       } else {
         this.sendError(
           res,
@@ -483,10 +440,16 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.params is validated
       const { locale } = req.params as z.infer<typeof localeParam>;
       const translations = await this.i18n.getAllTranslations(locale);
-      this.sendSuccess(res, translations);
+      if (
+        translations === undefined ||
+        Object.keys(translations).length === 0
+      ) {
+        this.sendSuccess(res, {}); // Return empty object if no translations found
+      } else {
+        this.sendSuccess(res, translations);
+      }
     } catch (error) {
       this.sendError(res, error);
     }
@@ -502,21 +465,23 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
       const options = {
         userId: params.userId,
         versionTag: params.versionTag,
-        timestamp: params.timestamp, // Already a number or undefined
+        timestamp: params.timestamp,
       };
 
-      // Handle potential "translation not found" errors from i18n.t specifically
       try {
         const translation = await this.i18n.t(params.key, {
           locale: params.locale,
           ...options,
         });
-        this.sendSuccess(res, { translation });
+        this.sendSuccess(res, {
+          key: params.key,
+          locale: params.locale,
+          translation,
+        });
       } catch (tError: any) {
-        // Assuming the i18n library throws an error containing 'not found' or similar
         if (
           tError.message &&
-          tError.message.toLowerCase().includes("not found")
+          tError.message.toLowerCase().includes("translation not found")
         ) {
           this.sendError(
             res,
@@ -526,7 +491,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
             404
           );
         } else {
-          throw tError; // Re-throw other errors to be caught by the outer catch
+          throw tError;
         }
       }
     } catch (error) {
@@ -539,13 +504,11 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.query is validated and timestamp is transformed to number
-      const params = req.query as z.infer<typeof translationRequestQuery>;
-
+      const params = req.query;
       const options = {
         userId: params.userId,
         versionTag: params.versionTag,
-        timestamp: params.timestamp, // Already a number or undefined
+        timestamp: params.timestamp,
       };
 
       const translation = await this.i18n.getTranslationWithTags(
@@ -553,7 +516,6 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
         params.locale,
         options
       );
-      // Handle case where translation might not exist
       if (!translation) {
         this.sendError(
           res,
@@ -564,7 +526,6 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
         );
         return;
       }
-
       this.sendSuccess(res, translation);
     } catch (error) {
       this.sendError(res, error);
@@ -576,18 +537,26 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.body is validated
       const params = req.body as z.infer<typeof updateTranslationBody>;
-
       const updatedTranslation = await this.i18n.updateTranslation(
         params.locale,
         params.key,
         params.value,
         params.userId,
         params.versionTag,
-        params.tags // Pass tags if present
+        params.tags
       );
-
+      if (!updatedTranslation) {
+        // This might happen if the underlying storage fails, though setTranslation might throw
+        this.sendError(
+          res,
+          new Error(
+            `Failed to update translation for key '${params.key}' in locale '${params.locale}'.`
+          ),
+          500
+        );
+        return;
+      }
       this.sendSuccess(res, updatedTranslation);
     } catch (error) {
       this.sendError(res, error);
@@ -600,15 +569,9 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   ): Promise<void> {
     try {
       const { key, locale } = req.query as z.infer<typeof keyAndLocaleQuery>;
-
       const result = await this.i18n.removeTranslation(locale, key);
       if (result) {
-        // Consider returning 204 No Content if successful and no body needed
-        // res.status(204).send();
-        this.sendSuccess(res, {
-          message: `Translation '${key}' for locale '${locale}' removed.`,
-          removed: true,
-        });
+        res.status(204).send(); // 204 No Content is appropriate here
       } else {
         this.sendError(
           res,
@@ -626,17 +589,11 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.params is validated
       const { locale, key } = req.params as z.infer<typeof localeAndKeyParams>;
       const versions = await this.i18n.getVersionHistory(locale, key);
       if (!versions || versions.length === 0) {
-        this.sendError(
-          res,
-          new Error(
-            `No version history found for key '${key}' in locale '${locale}'.`
-          ),
-          404
-        );
+        // Return empty array instead of 404 if history just doesn't exist yet
+        this.sendSuccess(res, []);
         return;
       }
       this.sendSuccess(res, versions);
@@ -650,7 +607,6 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.params is validated
       const { locale, key } = req.params as z.infer<typeof localeAndKeyParams>;
       const version = await this.i18n.getLatestVersion(locale, key);
       if (!version) {
@@ -672,7 +628,7 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
   private async handleGetAllTags(req: Request, res: Response): Promise<void> {
     try {
       const tags = await this.i18n.listAllTags();
-      this.sendSuccess(res, tags);
+      this.sendSuccess(res, tags ?? []); // Ensure array even if provider returns undefined/null
     } catch (error) {
       this.sendError(res, error);
     }
@@ -683,10 +639,9 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res: Response
   ): Promise<void> {
     try {
-      // req.params is validated
       const { locale } = req.params as z.infer<typeof localeParam>;
       const tags = await this.i18n.listAllTags(locale);
-      this.sendSuccess(res, tags);
+      this.sendSuccess(res, tags ?? []); // Ensure array
     } catch (error) {
       this.sendError(res, error);
     }
@@ -694,27 +649,22 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleAddTags(req: Request, res: Response): Promise<void> {
     try {
-      // req.body is validated
       const params = req.body as z.infer<typeof tagsRequestBody>;
-
       const result = await this.i18n.addTagsToTranslation(
         params.locale,
         params.key,
         params.tags
       );
-      // Check result, potentially return 404 if translation doesn't exist
       if (!result) {
-        // Assuming addTagsToTranslation returns boolean or similar
         this.sendError(
           res,
           new Error(
-            `Translation not found for key '${params.key}' in locale '${params.locale}' to add tags.`
+            `Translation not found for key '${params.key}' in locale '${params.locale}' or failed to add tags.`
           ),
           404
-        );
+        ); // Or 400 if tags invalid
         return;
       }
-
       this.sendSuccess(res, {
         updated: true,
         message: `Tags added to ${params.locale}/${params.key}.`,
@@ -726,27 +676,22 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleUpdateTags(req: Request, res: Response): Promise<void> {
     try {
-      // req.body is validated
       const params = req.body as z.infer<typeof tagsRequestBody>;
-
       const result = await this.i18n.updateTranslationTags(
         params.locale,
         params.key,
         params.tags
       );
-      // Check result, potentially return 404 if translation doesn't exist
       if (!result) {
-        // Assuming updateTranslationTags returns boolean or similar
         this.sendError(
           res,
           new Error(
-            `Translation not found for key '${params.key}' in locale '${params.locale}' to update tags.`
+            `Translation not found for key '${params.key}' in locale '${params.locale}' or failed to update tags.`
           ),
           404
         );
         return;
       }
-
       this.sendSuccess(res, {
         updated: true,
         message: `Tags updated for ${params.locale}/${params.key}.`,
@@ -758,29 +703,22 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleRemoveTags(req: Request, res: Response): Promise<void> {
     try {
-      // req.body is validated (as per original structure)
       const params = req.body as z.infer<typeof tagsRequestBody>;
-
       const result = await this.i18n.removeTagsFromTranslation(
         params.locale,
         params.key,
         params.tags
       );
-
-      // Check result, potentially return 404 if translation doesn't exist
       if (!result) {
-        // Assuming removeTagsFromTranslation returns boolean or similar
         this.sendError(
           res,
           new Error(
-            `Translation not found for key '${params.key}' in locale '${params.locale}' to remove tags.`
+            `Translation not found for key '${params.key}' in locale '${params.locale}' or failed to remove tags.`
           ),
           404
         );
         return;
       }
-
-      // Consider 204 No Content
       this.sendSuccess(res, {
         updated: true,
         message: `Specified tags removed from ${params.locale}/${params.key}.`,
@@ -792,16 +730,13 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleSearchByTags(req: Request, res: Response): Promise<void> {
     try {
-      // req.body is validated
       const params = req.body as z.infer<typeof searchByTagsBody>;
-
       const translations = await this.i18n.getTranslationsByTags(
         params.locale,
         params.tags,
-        { matchAll: params.matchAll ?? false } // Default matchAll to false if not provided
+        { matchAll: params.matchAll ?? false }
       );
-
-      this.sendSuccess(res, translations);
+      this.sendSuccess(res, translations ?? {}); // Ensure object
     } catch (error) {
       this.sendError(res, error);
     }
@@ -809,37 +744,72 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
 
   private async handleCountByTags(req: Request, res: Response): Promise<void> {
     try {
-      // req.body is validated
       const params = req.body as z.infer<typeof searchByTagsBody>;
-
       const count = await this.i18n.countTranslationsByTags(
         params.locale,
         params.tags,
-        { matchAll: params.matchAll ?? false } // Default matchAll to false
+        { matchAll: params.matchAll ?? false }
       );
-
       this.sendSuccess(res, { count });
     } catch (error) {
       this.sendError(res, error);
     }
   }
 
-  // --- Response Helpers ---
+  private async handleAiTranslate(req: Request, res: Response): Promise<void> {
+    try {
+      // Body is validated by middleware
+      const { translateFromLocale, translateToLocale, userId } =
+        req.body as z.infer<typeof aiTranslateBody>;
 
-  /**
-   * Formats Zod errors into a user-friendly string.
-   */
+      const result = await this.i18n.translateWithAI(
+        translateFromLocale,
+        translateToLocale,
+        this.aiClient,
+        userId
+      );
+
+      if (result) {
+        this.sendSuccess(
+          res,
+          {
+            message: `AI translation process completed for locale '${translateToLocale}'. Check result for details of the last added entry.`,
+            result: result, // Contains TaggedTranslationEntry details
+          },
+          200
+        ); // 200 OK is suitable here
+      } else {
+        console.log(
+          `${this.options.logPrefix} AI translation for locale '${translateToLocale}' completed, but no new entries were added (perhaps source was empty or AI returned no data).`
+        );
+        this.sendSuccess(
+          res,
+          {
+            message: `AI translation process completed for locale '${translateToLocale}', but no new translation entries were added. This might happen if the source was empty or the AI response was empty/invalid after parsing.`,
+            result: undefined,
+          },
+          200
+        ); // Still a success, but indicating nothing was added
+      }
+    } catch (error: any) {
+      // Specific error handling (e.g., locale not found is handled inside translateWithAI now, but API/AI client errors)
+      console.error(`${this.options.logPrefix} AI translation failed:`, error);
+      // Keep generic sendError which detects status code or defaults to 500
+      this.sendError(res, error);
+    }
+  }
+  // --- END NEW HANDLER ---
+
+  // --- Response Helpers ---
+  // ... (sendSuccess, sendZodError, sendError, formatZodError remain the same) ...
   private formatZodError(error: ZodError): string {
     return error.errors
-      .map((e) => `${e.path.join(".") || "field"}: ${e.message}`) // Changed "error" to "field"
+      .map((e) => `${e.path.join(".") || "field"}: ${e.message}`)
       .join("; ");
   }
 
-  /**
-   * Отправка успешного ответа
-   */
   private sendSuccess<T>(res: Response, data: T, status: number = 200): void {
-    if (res.headersSent) return; // Avoid setting headers after they are sent
+    if (res.headersSent) return;
     const response: ApiResponse<T> = {
       success: true,
       data,
@@ -847,49 +817,51 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     res.status(status).json(response);
   }
 
-  /**
-   * Отправка ответа с ошибкой валидации Zod
-   */
   private sendZodError(res: Response, error: ZodError): void {
     if (res.headersSent) return;
     const errorMessage = this.formatZodError(error);
-    console.warn(`${this.options.logPrefix} Validation Error: ${errorMessage}`); // Log validation errors
+    console.warn(`${this.options.logPrefix} Validation Error: ${errorMessage}`);
     const response: ApiResponse = {
       success: false,
       error: `Validation failed: ${errorMessage}`,
-      details: error.flatten(), // Optionally include detailed errors
+      details: error.flatten(),
     };
-    res.status(400).json(response); // Use 400 Bad Request for validation errors
+    res.status(400).json(response);
   }
 
-  /**
-   * Отправка ответа с ошибкой
-   */
   private sendError(
     res: Response,
     error: Error | unknown,
-    status?: number // Made status optional, will determine based on error type
+    status?: number
   ): void {
     if (res.headersSent) return;
 
     let errorMessage = "An unknown error occurred";
-    let statusCode = status ?? 500; // Default to 500 if status not provided
+    let statusCode = status ?? 500;
+    let errorStack: string | undefined; // Add stack trace for server errors
 
     if (error instanceof Error) {
       errorMessage = error.message;
-      // Simple check for typical "Not Found" errors to set 404, can be refined
+      // Simple check for typical "Not Found" errors or AI client errors to set appropriate status
       if (!status && error.message.toLowerCase().includes("not found")) {
         statusCode = 404;
+      } else if (
+        !status &&
+        error.message.toLowerCase().includes("failed") &&
+        error.message.toLowerCase().includes("ai")
+      ) {
+        // If AI client fails specifically, maybe 502 Bad Gateway or 503 Service Unavailable? Let's use 500 for now.
+        statusCode = 500; // Or could be more specific like 502/503 if known
       }
+      errorStack = error.stack; // Capture stack trace
     } else if (typeof error === "string") {
       errorMessage = error;
     }
 
-    // Log appropriately based on status code
     if (statusCode >= 500) {
       console.error(
         `${this.options.logPrefix} Server Error (${statusCode}): ${errorMessage}`,
-        error instanceof Error ? error.stack : error
+        errorStack || error
       );
     } else {
       console.warn(
@@ -900,10 +872,10 @@ export class ExpressAdapter extends BaseApiAdapter implements ApiAdapter {
     const response: ApiResponse = {
       success: false,
       error: errorMessage,
-      // Optionally add more details in dev mode
-      // stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
+      // Optionally add stack in dev mode ONLY
+      // stack: process.env.NODE_ENV === 'development' ? errorStack : undefined,
     };
 
     res.status(statusCode).json(response);
   }
-}
+} // End of ExpressAdapter class

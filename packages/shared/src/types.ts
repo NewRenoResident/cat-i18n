@@ -7,6 +7,14 @@ export interface VersionInfo {
   key: string;
   value: string;
 }
+export interface AiClient {
+  /**
+   * Отправляет промпт AI и ожидает JSON-ответ.
+   * @param prompt - Текстовый промпт для AI.
+   * @returns Объект с методом json(), который возвращает Promise, разрешающийся в распарсенный JSON-ответ от AI.
+   */
+  post(prompt: string): Promise<{ json(): Promise<any> }>;
+}
 
 export interface LocaleDocument {
   code: string;

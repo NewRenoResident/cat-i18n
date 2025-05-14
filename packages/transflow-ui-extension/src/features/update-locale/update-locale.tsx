@@ -127,19 +127,18 @@ export const UpdateLocale = ({ locale, onLocaleUpdated }: IUpdateLocale) => {
         onClose={handleClose}
         anchorOrigin={{
           vertical: "bottom",
-          horizontal: "center", // Adjusted position slightly
+          horizontal: "center",
         }}
         transformOrigin={{
           vertical: "top",
-          horizontal: "center", // Adjusted position slightly
+          horizontal: "center",
         }}
       >
         <Box component="form" onSubmit={handleSubmit} sx={{ p: 3, width: 300 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Update Locale ({locale}) {/* Show code in title */}
+            Update Locale ({locale})
           </Typography>
 
-          {/* Display error from the mutation hook */}
           {updateLocaleMutation.isError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {/* Provide a more specific error message if possible */}

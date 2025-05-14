@@ -1,8 +1,10 @@
 import {
+  AiClient,
   LocaleData,
   LocaleDocument,
   StorageProvider,
   TaggedTranslationEntry,
+  TranslationEntry,
   TranslationMap,
   TranslationStorage,
   VersionInfo,
@@ -475,9 +477,9 @@ export class I18n {
     const result = await this.storageProvider.addLocale(locale);
 
     // Update cache with new locale
-    if (result && locale.translations) {
-      this.cacheManager.setTranslations(locale.code, locale.translations);
-    }
+    // if (result && locale.translations) {
+    //   this.cacheManager.setTranslations(locale.code, locale.translations);
+    // }
 
     return result;
   }
@@ -600,6 +602,99 @@ export class I18n {
       throw new Error("Storage provider does not support tags");
     }
     return await this.storageProvider.listAllTags(locale);
+  }
+
+  async translateWithAI(
+    translateFromLocale: string,
+    translateToLocale: string,
+    aiClient: AiClient,
+    userId: string
+  ): Promise<TaggedTranslationEntry | undefined> {
+    // Validate source and target locales
+    const availableLocales = await this.getAvailableLocales();
+    if (!availableLocales.includes(translateFromLocale)) {
+      throw new Error(
+        `Source locale '${translateFromLocale}' not found. Cannot add AI translations.`
+      );
+    }
+
+    // Get source translations
+    const sourceStorage =
+      await this.storageProvider.getAllTranslations(translateFromLocale);
+
+    if (!sourceStorage || Object.keys(sourceStorage).length === 0) {
+      throw new Error(
+        `No translation entries found for source locale '${translateFromLocale}'.`
+      );
+    }
+
+    // Prepare request for AI translation
+    const request = `Translate the string values in the following JSON object into the '${translateToLocale}' language. Maintain the exact same JSON structure and keys. Respond *only* with the resulting JSON object containing the translated values. If you encounter any issues or cannot translate, you can include a "message" field at the root level explaining the problem:\n\n${JSON.stringify(sourceStorage, null, 2)} `;
+
+    // Process AI response
+    let aiResponseJson: any;
+    try {
+      const response = await aiClient.post(request);
+      console.log("AI translation response:", response);
+
+      try {
+        aiResponseJson = await response.json();
+      } catch (parseError) {
+        throw new Error(
+          `Failed to parse AI response as JSON: ${parseError.message}`
+        );
+      }
+    } catch (error) {
+      throw new Error(
+        `AI translation request failed for locale '${translateToLocale}': ${error.message}`
+      );
+    }
+
+    // Validate AI response
+    if (typeof aiResponseJson !== "object" || aiResponseJson === null) {
+      throw new Error(
+        `Invalid AI translation response format for locale '${translateToLocale}'. Expected JSON object.`
+      );
+    }
+
+    // Verify response structure matches source
+    const sourceKeys = Object.keys(sourceStorage);
+    const translatedKeys = Object.keys(aiResponseJson);
+
+    if (sourceKeys.length !== translatedKeys.length) {
+      throw new Error(
+        `AI translation response has different number of keys than source (${translatedKeys.length} vs ${sourceKeys.length}).`
+      );
+    }
+
+    for (const key of sourceKeys) {
+      if (!translatedKeys.includes(key)) {
+        throw new Error(
+          `AI translation response is missing key '${key}' present in source.`
+        );
+      }
+    }
+
+    const translatedMap: TranslationMap = aiResponseJson;
+
+    // Save translations
+    try {
+      const result = await this.addTranslations(
+        translateToLocale,
+        translatedMap,
+        userId
+      );
+
+      return result;
+    } catch (error) {
+      console.error(
+        `translateWithAI Error: Failed to add AI translations for locale '${translateToLocale}' using addTranslations.`,
+        error
+      );
+      throw new Error(
+        `Failed to add AI translations for locale '${translateToLocale}': ${error.message}`
+      );
+    }
   }
 
   /**

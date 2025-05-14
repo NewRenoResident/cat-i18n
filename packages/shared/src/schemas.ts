@@ -16,6 +16,11 @@ export const localeAndKeyParams = z.object({
     .min(1, "Key parameter cannot be empty"),
 });
 
+export const aiTranslateBody = z.object({
+  locale: z.string().min(1, "Locale code cannot be empty"),
+  userId: z.string().min(1, "User ID cannot be empty"),
+});
+
 export const keyAndLocaleQuery = z.object({
   key: z
     .string({ required_error: "Key query parameter is required" })
@@ -127,6 +132,7 @@ export const translationRequestQuery = z.object({
 
 // Export all schema types for easy importing
 export type LocaleParam = z.infer<typeof localeParam>;
+export type AiTranslateBody = z.infer<typeof aiTranslateBody>;
 export type LocaleAndKeyParams = z.infer<typeof localeAndKeyParams>;
 export type KeyAndLocaleQuery = z.infer<typeof keyAndLocaleQuery>;
 export type AddTranslationsBody = z.infer<typeof addTranslationsBody>;
